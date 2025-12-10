@@ -1,0 +1,33 @@
+description: >
+  Example workflow demonstrating how to use the private connectivity orb to access private repositories via circleci tunnel.
+
+usage:
+  version: 2.1
+
+  orbs:
+    private-connectivity: your-namespace/private-connectivity@0.0.1
+
+  jobs:
+    build-with-private-repo:
+      docker:
+        - image: cimg/base:current
+      steps:
+        - private-connectivity/setup:
+            ngrok-api-token: NGROK_API_TOKEN
+            ip-policy-id: CIRCLE_IP_POLICY_ID
+            tcp-address: "1.tcp.ngrok.io"
+            tcp-port: "28402"
+        - private-connectivity/checkout
+        - run:
+            name: Build application
+            command: |
+              # Your build commands here
+              echo "Building application..."
+        - private-connectivity/cleanup
+
+  workflows:
+    private-repo-workflow:
+      jobs:
+        - build-with-private-repo:
+            context:
+              - ngrok-credentials

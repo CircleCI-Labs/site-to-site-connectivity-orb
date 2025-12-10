@@ -1,0 +1,16 @@
+---
+description: >
+  Cleanup circleci tunnel and remove IP policy rules
+
+parameters:
+  ngrok-api-token:
+    type: env_var_name
+    description: "Environment variable containing the ngrok API token"
+    default: NGROK_API_TOKEN
+
+steps:
+  - run:
+      environment:
+        NGROK_API_TOKEN: ${<< parameters.ngrok-api-token >>}
+      name: Cleanup tunnel
+      command: <<include(scripts/cleanup.sh)>>

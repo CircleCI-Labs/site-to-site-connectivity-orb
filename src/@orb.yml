@@ -1,0 +1,9 @@
+---
+version: 2.1
+
+description: >
+  A CircleCI orb for setting up private connectivity via circleci tunnels to enable secure access to private repositories and resources
+
+display:
+  home_url: "https://circleci.com/docs/"
+  source_url: "https://github.com/CircleCI-Labs/private-connectivity-orb"

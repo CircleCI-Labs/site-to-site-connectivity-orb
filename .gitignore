@@ -1,0 +1,47 @@
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+.classpath
+
+# CircleCI orb development
+orb.yml
+*.orb.yml
+
+# Temporary files
+*.tmp
+*.log
+tmp/
+temp/
+
+# Environment files
+.env
+.env.local
+.envrc
+
+# Node modules (if using orb development tools)
+node_modules/
+
+# Python (if using Python tools)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Test output
+test-results/
+coverage/
