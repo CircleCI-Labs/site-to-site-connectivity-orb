@@ -6,31 +6,53 @@ description: >
 usage:
   version: 2.1
 
-  orbs:
-    site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
+orbs:
+  site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
 
-  jobs:
-    build-with-private-repo:
-      docker:
-        - image: cimg/base:current
-      steps:
-        - site-to-site-connectivity/setup:
-            ngrok-api-token: $NGROK_API_TOKEN
-            ip-policy-id: $CIRCLE_IP_POLICY_ID
-            tcp-address: "1.tcp.ngrok.io"
-            tcp-port: "28402"
-        - site-to-site-connectivity/checkout:
-            git-url: << pipeline.parameters.git-url >>
-        - run:
-            name: Build application
-            command: |
-              # Your build commands here
-              echo "Building application..."
-        - site-to-site-connectivity/cleanup
+parameters:
+  ngrok-api-token:
+    type: env_var_name
+    description: "Environment variable name containing the Ngrok API token"
+    default: NGROK_API_TOKEN
+  tunnel-address:
+    type: env_var_name
+    description: >
+      Environment variable name containing the tunnel address for the
+      CircleCI tunnel
+    default: "TUNNEL_ADDRESS"
+  tunnel-port:
+    type: env_var_name
+    description: >
+      Environment variable name containing the tunnel port for the
+      CircleCI tunnel
+    default: "TUNNEL_PORT"
+  debug:
+    type: boolean
+    description: "Enable debug mode"
+    default: false
 
-  workflows:
-    private-repo-workflow:
-      jobs:
-        - build-with-private-repo:
-            context:
-              - ngrok-credentials
+jobs:
+  build-with-private-repo:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - site-to-site-connectivity/setup:
+          ngrok-api-token: $NGROK_API_TOKEN
+          ip-policy-id: $CIRCLE_IP_POLICY_ID
+          tcp-address: "1.tcp.ngrok.io"
+          tcp-port: "28402"
+      - site-to-site-connectivity/checkout:
+          git-url: << pipeline.parameters.git-url >>
+      - run:
+          name: Build application
+          command: |
+            # Your build commands here
+            echo "Building application..."
+      - site-to-site-connectivity/cleanup
+
+workflows:
+  private-repo-workflow:
+    jobs:
+      - build-with-private-repo:
+          context:
+            - ngrok-credentials
