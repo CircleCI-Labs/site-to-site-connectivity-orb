@@ -1,5 +1,7 @@
+---
 description: >
-  Example workflow demonstrating how to use the site to site connectivity orb to access private repositories via CircleCI tunnel.
+  Example workflow demonstrating how to use the site to site connectivity
+  orb to access private repositories via CircleCI tunnel.
 
 usage:
   version: 2.1

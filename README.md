@@ -99,14 +99,14 @@ workflows:
 
 ### How to Contribute
 
-We welcome [issues](https://github.com/CircleCI-Labs/private-connectivity-orb/issues) to and [pull requests](https://github.com/CircleCI-Labs/private-connectivity-orb/pulls) against this repository!
+We welcome [issues](https://github.com/CircleCI-Labs/site-to-site-connectivity-orb/issues) to and [pull requests](https://github.com/CircleCI-Labs/site-to-site-connectivity-orb/pulls) against this repository!
 
 ### How to Publish An Update
 
 1. Merge pull requests with desired changes to the main branch.
 2. Find the current version of the orb.
    - You can run `circleci orb info your-namespace/site-to-site-connectivity | grep "Latest"` to see the current version.
-3. Create a [new Release](https://github.com/CircleCI-Labs/private-connectivity-orb/releases/new) on GitHub.
+3. Create a [new Release](https://github.com/CircleCI-Labs/site-to-site-connectivity-orb/releases/new) on GitHub.
    - Click "Choose a tag" and create a new [semantically versioned](http://semver.org/) tag. (ex: v1.0.0)
 4. Click "Publish Release".
    - This will push a new tag and trigger your publishing pipeline on CircleCI.

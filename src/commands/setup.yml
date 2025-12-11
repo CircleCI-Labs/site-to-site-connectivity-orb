@@ -9,15 +9,21 @@ parameters:
     default: NGROK_API_TOKEN
   ip-policy-id:
     type: env_var_name
-    description: "Environment variable name containing the IP policy ID for the CircleCI tunnel"
+    description: >
+      Environment variable name containing the IP policy ID for the
+      CircleCI tunnel
     default: IP_POLICY_ID
   tunnel-address:
     type: env_var_name
-    description: "Environment variable name containing the tunnel address for the CircleCI tunnel"
+    description: >
+      Environment variable name containing the tunnel address for the
+      CircleCI tunnel
     default: "TUNNEL_ADDRESS"
   tunnel-port:
     type: env_var_name
-    description: "Environment variable name containing the tunnel port for the CircleCI tunnel"
+    description: >
+      Environment variable name containing the tunnel port for the
+      CircleCI tunnel
     default: "TUNNEL_PORT"
   debug:
     type: boolean

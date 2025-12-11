@@ -5,11 +5,15 @@ description: >
 parameters:
   tunnel-address:
     type: env_var_name
-    description: "Environment variable name containing the tunnel address for the CircleCI tunnel"
+    description: >
+      Environment variable name containing the tunnel address for the
+      CircleCI tunnel
     default: "TUNNEL_ADDRESS"
   tunnel-port:
     type: env_var_name
-    description: "Environment variable name containing the tunnel port for the CircleCI tunnel"
+    description: >
+      Environment variable name containing the tunnel port for the
+      CircleCI tunnel
     default: "TUNNEL_PORT"
   git-url:
     type: string
