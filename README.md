@@ -78,8 +78,8 @@ jobs:
       - image: cimg/base:current
     steps:
       - site-to-site-connectivity/setup:
-          ngrok-api-token: NGROK_API_TOKEN
-          ip-policy-id: CIRCLE_IP_POLICY_ID
+          ngrok-api-token: $NGROK_API_TOKEN
+          ip-policy-id: $CIRCLE_IP_POLICY_ID
           tcp-address: "1.tcp.ngrok.io"
           tcp-port: "28402"
       - site-to-site-connectivity/checkout:
