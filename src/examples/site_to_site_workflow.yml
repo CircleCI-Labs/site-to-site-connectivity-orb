@@ -9,46 +9,46 @@ usage:
 orbs:
   site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
 
-parameters:
-  ngrok-api-token:
-    type: env_var_name
-    description: "Environment variable name containing the Ngrok API token"
-    default: NGROK_API_TOKEN
-  tunnel-address:
-    type: env_var_name
-    description: >
-      Environment variable name containing the tunnel address for the
-      CircleCI tunnel
-    default: "TUNNEL_ADDRESS"
-  tunnel-port:
-    type: env_var_name
-    description: >
-      Environment variable name containing the tunnel port for the
-      CircleCI tunnel
-    default: "TUNNEL_PORT"
-  debug:
-    type: boolean
-    description: "Enable debug mode"
-    default: false
+  parameters:
+    ngrok-api-token:
+      type: env_var_name
+      description: "Environment variable name containing the Ngrok API token"
+      default: NGROK_API_TOKEN
+    tunnel-address:
+      type: env_var_name
+      description: >
+        Environment variable name containing the tunnel address for the
+        CircleCI tunnel
+      default: "TUNNEL_ADDRESS"
+    tunnel-port:
+      type: env_var_name
+      description: >
+        Environment variable name containing the tunnel port for the
+        CircleCI tunnel
+      default: "TUNNEL_PORT"
+    debug:
+      type: boolean
+      description: "Enable debug mode"
+      default: false
 
-jobs:
-  build-with-private-repo:
-    docker:
-      - image: cimg/base:current
-    steps:
-      - site-to-site-connectivity/setup
-      - site-to-site-connectivity/checkout:
-          git-url: << pipeline.parameters.git-url >>
-      - run:
-          name: Build application
-          command: |
-            # Your build commands here
-            echo "Building application..."
-      - site-to-site-connectivity/cleanup
+  jobs:
+    build-with-private-repo:
+      docker:
+        - image: cimg/base:current
+      steps:
+        - site-to-site-connectivity/setup
+        - site-to-site-connectivity/checkout:
+            git-url: << pipeline.parameters.git-url >>
+        - run:
+            name: Build application
+            command: |
+              # Your build commands here
+              echo "Building application..."
+        - site-to-site-connectivity/cleanup
 
-workflows:
-  private-repo-workflow:
-    jobs:
-      - build-with-private-repo:
-          context:
-            - ngrok-credentials
+  workflows:
+    private-repo-workflow:
+      jobs:
+        - build-with-private-repo:
+            context:
+              - ngrok-credentials
