@@ -1,7 +1,7 @@
 ---
 description: >
   Configure SSH aliases to route git traffic through the CircleCI tunnel.
-  This allows you to use original git URLs 
+  This allows you to use original git URLs
   (e.g., git@gitlab.example.com:org/repo.git) without rewriting them -
   SSH will automatically route through the tunnel and checkout
   code from a private repository via CircleCI tunnel.
