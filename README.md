@@ -4,18 +4,11 @@
 
 A CircleCI orb for establishing site to site connectivity via CircleCI tunnels to enable secure access to private repositories and resources during builds.
 
-### Disclaimer:
-
-CircleCI Labs, including this repo, is a collection of solutions developed by members of CircleCI's Field Engineering teams through our engagement with various customer needs.
-
-    ✅ Created by engineers @ CircleCI
-    ✅ Used by real CircleCI customers
-    ❌ not officially supported by CircleCI support
-
 ## Overview
 
 This orb provides commands to:
 - Set up CircleCI tunnels with IP policy rules for secure access
+- Set up an ssh alias to route git traffic through a tunnel using your internal VCS URL
 - Checkout code from private repositories through the tunnel
 - Clean up tunnel resources after the build
 

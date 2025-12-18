@@ -1,6 +1,9 @@
 ---
 description: >
-  Checkout code from a private repository via CircleCI tunnel
+  Configure SSH aliases to route git traffic through the CircleCI tunnel.
+  This allows you to use original git URLs (e.g., git@gitlab.example.com:org/repo.git)
+  without rewriting them - SSH will automatically route through the tunnel and checkout
+  code from a private repository via CircleCI tunnel.
 
 parameters:
   tunnel-address:
@@ -18,6 +21,11 @@ parameters:
   git-url:
     type: string
     description: "Git URL to the repository"
+  original-hostname:
+    type: string
+    description: >
+      The original git server hostname (e.g., gitlab.example.com).
+      Git commands using this hostname will be routed through the tunnel.
   checkout-folder:
     type: string
     description: "Folder to checkout the repository into"
@@ -29,6 +37,14 @@ parameters:
 
 
 steps:
+  - run:
+      environment:
+        PARAM_TUNNEL_ADDRESS: << parameters.tunnel-address >>
+        PARAM_TUNNEL_PORT: << parameters.tunnel-port >>
+        ORIGINAL_HOSTNAME: << parameters.original-hostname >>
+        DEBUG: << parameters.debug >>
+      name: Configure SSH for tunnel
+      command: <<include(scripts/ssh-aliases.sh)>>
   - run:
       environment:
         PARAM_TUNNEL_ADDRESS: << parameters.tunnel-address >>
