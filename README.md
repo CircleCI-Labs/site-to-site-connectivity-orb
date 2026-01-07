@@ -41,6 +41,8 @@ Sets up an CircleCI tunnel by creating an IP policy rule for the current CircleC
 - `ip-policy-id` (env_var_name): Name of the env var containing the IP policy ID (default: `IP_POLICY_ID`)
 - `tunnel-address` (env_var_name): Name of the env var containing the tunnel address (default: `TUNNEL_ADDRESS`)
 - `tunnel-port` (env_var_name): Name of the env var containing the tunnel port (default: `TUNNEL_PORT`)
+- `verify-tunnel` (boolean): Verifies tunnel or fails the step (default: `true`)
+- `verify-tunnel-attempts` (integer): Number of attempts before abandoning the tunnel (default: `30`)
 - `debug` (boolean): Enable debug logging (prints the curl command), default: `false`
 
 **Exports:**

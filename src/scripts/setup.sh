@@ -56,6 +56,27 @@ curl -H 'Accept: application/json' \
   --fail -o "$tunnel_file" \
   "https://api.ngrok.com/ip_policy_rules"
 
+if [[ -n "${PARAM_VERIFY_TUNNEL:-}" ]]; then
+  echo "Verifying the connection before exiting"
+  verified=0
+  for i in {1..${PARAM_VERIFY_TUNNEL_ATTEMPTS:-}}; do
+    echo "Attempt $i"
+    timeout 1s nc -v "${resolved_tunnel_address}" "${resolved_tunnel_port}"
+    # When timeout is reached the connection is not immediately closed and we can assume the connection is working
+    if [[ $? -eq 124 ]]; then
+      echo "Connection verified"
+      verified=1
+      break
+    fi
+    sleep 3
+    echo "Connection not verified, retrying..."
+  done
+  if [[ $verified -eq 0 ]]; then
+    echo "Connection not verified after 30 attempts"
+    exit 1
+  fi
+fi
+
 echo "Exporting IPR_ID to environment"
 echo "export IPR_ID=\"$(jq -r '.id' "$tunnel_file")\"" >> "$BASH_ENV"
 echo "Sourcing BASH_ENV to update the environment"

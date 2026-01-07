@@ -25,6 +25,14 @@ parameters:
       Environment variable name containing the tunnel port for the
       CircleCI tunnel
     default: "TUNNEL_PORT"
+  verify-tunnel:
+    type: boolean
+    description: "Verify the connection before exiting"
+    default: true
+  verify-tunnel-attempts:
+    type: integer
+    description: "Number of attempts before failing to verify the tunnel"
+    default: 30
   debug:
     type: boolean
     description: "Enable debug mode"
@@ -37,6 +45,8 @@ steps:
         PARAM_IP_POLICY_ID: << parameters.ip-policy-id >>
         PARAM_TUNNEL_ADDRESS: << parameters.tunnel-address >>
         PARAM_TUNNEL_PORT: << parameters.tunnel-port >>
+        PARAM_VERIFY_TUNNEL: << parameters.verify-tunnel >>
+        PARAM_VERIFY_TUNNEL_ATTEMPTS: << parameters.verify-tunnel-attempts >>
         DEBUG: << parameters.debug >>
       name: Setup the CircleCI tunnel
       command: <<include(scripts/setup.sh)>>
