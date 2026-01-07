@@ -48,6 +48,6 @@ ssh-keyscan -p "${resolved_tunnel_port}" "${resolved_tunnel_address}" >> ~/.ssh/
 
 # Clone the repository
 echo "Cloning repository from: ${REPO_URL} into: ${CHECKOUT_FOLDER}"
-GIT_TERMINAL_PROMPT=0 git clone "$REPO_URL" "${CHECKOUT_FOLDER}"
+GIT_TERMINAL_PROMPT=0 git clone --branch ${CIRCLE_BRANCH} --single-branch "$REPO_URL" "${CHECKOUT_FOLDER}"
 
 echo "Repository cloned successfully."
