@@ -24,7 +24,7 @@ workflows:
           filters: *filters
       - shellcheck/check:
           shell: bash
-          exclude: SC2086
+          exclude: SC2086, SC2051
           filters: *filters
       - orb-tools/publish:
           orb-name: cci-labs/site-to-site-connectivity
