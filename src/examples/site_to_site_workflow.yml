@@ -2,13 +2,10 @@
 description: >
   Example workflow demonstrating how to use the site to site connectivity
   orb to access private repositories via CircleCI tunnel.
-
 usage:
   version: 2.1
-
-orbs:
-  site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
-
+  orbs:
+    site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
   parameters:
     ngrok-api-token:
       type: env_var_name
@@ -30,7 +27,6 @@ orbs:
       type: boolean
       description: "Enable debug mode"
       default: false
-
   jobs:
     build-with-private-repo:
       docker:
@@ -45,7 +41,6 @@ orbs:
               # Your build commands here
               echo "Building application..."
         - site-to-site-connectivity/cleanup
-
   workflows:
     private-repo-workflow:
       jobs:
