@@ -18,4 +18,5 @@ steps:
         PARAM_NGROK_API_TOKEN: << parameters.ngrok-api-token >>
         DEBUG: << parameters.debug >>
       name: Cleanup tunnel
+      when: always
       command: <<include(scripts/cleanup.sh)>>
