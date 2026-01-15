@@ -48,6 +48,17 @@ ssh-keyscan -p "${resolved_tunnel_port}" "${resolved_tunnel_address}" >> ~/.ssh/
 
 # Clone the repository
 echo "Cloning repository from: ${REPO_URL} into: ${CHECKOUT_FOLDER}"
-GIT_TERMINAL_PROMPT=0 git clone --branch ${CIRCLE_BRANCH} --single-branch "$REPO_URL" "${CHECKOUT_FOLDER}"
+
+# Determine what to clone (branch or tag)
+if [ -n "${CIRCLE_BRANCH:-}" ]; then
+  echo "Cloning branch: ${CIRCLE_BRANCH}"
+  GIT_TERMINAL_PROMPT=0 git clone --branch ${CIRCLE_BRANCH} --single-branch "$REPO_URL" "${CHECKOUT_FOLDER}"
+elif [ -n "${CIRCLE_TAG:-}" ]; then
+  echo "Cloning tag: ${CIRCLE_TAG}"
+  GIT_TERMINAL_PROMPT=0 git clone --branch ${CIRCLE_TAG} --single-branch "$REPO_URL" "${CHECKOUT_FOLDER}"
+else
+  echo "Error: Neither CIRCLE_BRANCH nor CIRCLE_TAG is set"
+  exit 1
+fi
 
 echo "Repository cloned successfully."
