@@ -37,7 +37,10 @@ ip="$(curl --fail https://checkip.amazonaws.com/)"
 
 echo "Setting up the CircleCI tunnel with IP: $ip"
 
-brew install coreutils
+# Install coreutils on Mac only
+if [ $(command -v brew) ];then
+  brew install coreutils
+fi
 
 if [[ -n "${DEBUG:-}" ]]; then
   echo "DEBUG curl command:"
