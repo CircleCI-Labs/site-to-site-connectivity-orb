@@ -38,6 +38,7 @@ steps:
         PARAM_TUNNEL_PORT: << parameters.tunnel-port >>
         GIT_URL: << parameters.git-url >>
         CHECKOUT_FOLDER: << parameters.checkout-folder >>
+        CHECKOUT_DEPTH: << parameters.checkout-depth >>
         DEBUG: << parameters.debug >>
       name: Clone repo
       command: <<include(scripts/checkout.sh)>>
