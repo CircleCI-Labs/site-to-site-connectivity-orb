@@ -10,10 +10,6 @@ orbs:
   site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
 
   parameters:
-    ngrok-api-token:
-      type: env_var_name
-      description: "Environment variable name containing the Ngrok API token"
-      default: NGROK_API_TOKEN
     tunnel-address:
       type: env_var_name
       description: >
@@ -51,4 +47,4 @@ orbs:
       jobs:
         - build-with-private-repo:
             context:
-              - ngrok-credentials
+              - site-to-site-tunnel

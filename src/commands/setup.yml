@@ -3,16 +3,6 @@ description: >
   Setup CircleCI tunnel for site to site connectivity
 
 parameters:
-  ngrok-api-token:
-    type: env_var_name
-    description: "Environment variable name containing the Ngrok API token"
-    default: NGROK_API_TOKEN
-  ip-policy-id:
-    type: env_var_name
-    description: >
-      Environment variable name containing the IP policy ID for the
-      CircleCI tunnel
-    default: IP_POLICY_ID
   tunnel-address:
     type: env_var_name
     description: >
@@ -41,8 +31,6 @@ parameters:
 steps:
   - run:
       environment:
-        PARAM_NGROK_API_TOKEN: << parameters.ngrok-api-token >>
-        PARAM_IP_POLICY_ID: << parameters.ip-policy-id >>
         PARAM_TUNNEL_ADDRESS: << parameters.tunnel-address >>
         PARAM_TUNNEL_PORT: << parameters.tunnel-port >>
         PARAM_VERIFY_TUNNEL: << parameters.verify-tunnel >>
