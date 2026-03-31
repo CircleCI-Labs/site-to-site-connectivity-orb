@@ -3,10 +3,6 @@ description: >
   Cleanup CircleCI tunnel and remove IP policy rules
 
 parameters:
-  ngrok-api-token:
-    type: env_var_name
-    description: "Environment variable name containing the Ngrok API token"
-    default: NGROK_API_TOKEN
   debug:
     type: boolean
     description: "Enable debug mode"
@@ -15,7 +11,6 @@ parameters:
 steps:
   - run:
       environment:
-        PARAM_NGROK_API_TOKEN: << parameters.ngrok-api-token >>
         DEBUG: << parameters.debug >>
       name: Cleanup tunnel
       when: always

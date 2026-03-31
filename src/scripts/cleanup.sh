@@ -5,40 +5,42 @@ set -eu -o pipefail
 # Check if environment variables are set
 missing=0
 
-# Resolve indirect values (PARAM_* contains the variable name to read)
-resolved_ngrok_api_token="${!PARAM_NGROK_API_TOKEN:-}"
-
-if [ -z "${resolved_ngrok_api_token}" ]; then
-  echo "Error: ${PARAM_NGROK_API_TOKEN} is not set or empty"
+if [ -z "${CIRCLE_OIDC_TOKEN:-}" ]; then
+  echo "Error: CIRCLE_OIDC_TOKEN is not set."
   missing=1
 fi
-if [ -z "${IPR_ID:-}" ]; then
-  echo "Error: IPR_ID is not set or empty"
+if [ -z "${EXECUTOR_IP:-}" ]; then
+  echo "Error: EXECUTOR_IP is not set or empty"
   missing=1
 fi
 if [ "$missing" -ne 0 ]; then
   exit 1
 fi
 
-echo "Cleaning up CircleCI tunnel with IPR_ID: ${IPR_ID}"
+echo "Cleaning up CircleCI tunnel for IP: ${EXECUTOR_IP}"
 
 if [[ -n "${DEBUG:-}" ]]; then
   echo "DEBUG curl command:"
   echo curl -H 'Accept: application/json' \
-    -H "Authorization: Bearer ${resolved_ngrok_api_token}" \
+    -H "Authorization: Bearer \${CIRCLE_OIDC_TOKEN}" \
     -H "Content-Type: application/json" \
-    -H "Ngrok-Version: 2" \
-    -X DELETE \
-    --fail \
-    "https://api.ngrok.com/ip_policy_rules/${IPR_ID}"
+    -d '{"ip":"'"${EXECUTOR_IP}"'"}' \
+    "https://internal.circleci.com/api/private/site-to-site/ip-policy/remove"
 fi
 
-curl -H 'Accept: application/json' \
-  -H "Authorization: Bearer ${resolved_ngrok_api_token}" \
+http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+  -H 'Accept: application/json' \
+  -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
   -H "Content-Type: application/json" \
-  -H "Ngrok-Version: 2" \
-  -X DELETE \
-  --fail \
-  "https://api.ngrok.com/ip_policy_rules/${IPR_ID}"
+  -d '{"ip":"'"${EXECUTOR_IP}"'"}' \
+  "https://internal.circleci.com/api/private/site-to-site/ip-policy/remove")
+
+if [ "$http_code" -ne 200 ]; then
+  echo "Error: IP removal failed (HTTP ${http_code})"
+  if [ "$http_code" -eq 404 ]; then
+    echo "This typically indicates an OIDC authentication issue."
+  fi
+  exit 1
+fi
 
 echo "CircleCI tunnel cleanup complete"

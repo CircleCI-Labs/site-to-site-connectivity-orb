@@ -4,7 +4,7 @@
 
 A CircleCI orb for establishing site to site connectivity via CircleCI tunnels to enable secure access to private repositories and resources during builds.
 
-### Disclaimer:
+### Disclaimer
 
 CircleCI Labs, including this repo, is a collection of solutions developed by members of CircleCI's Field Engineering teams through our engagement with various customer needs.
 
@@ -15,18 +15,14 @@ CircleCI Labs, including this repo, is a collection of solutions developed by me
 ## Overview
 
 This orb provides commands to:
+
 - Set up CircleCI tunnels with IP policy rules for secure access
 - Checkout code from private repositories through the tunnel
 - Clean up tunnel resources after the build
 
 ## Prerequisites
 
-- An Ngrok account with API access, which is provided by CircleCI
-- Ngrok API token stored as an environment variable (`NGROK_API_TOKEN`), which is provided by CircleCI
-- An IP policy ID configured in your Ngrok account and stored as an environment variable (`IP_POLICY_ID`), which is provided by CircleCI
-- Creation of a CircleCI context which holds the following environment variables:
-  - NGROK_API_TOKEN
-  - IP_POLICY_ID
+- A CircleCI context with the following environment variables:
   - TUNNEL_ADDRESS
   - TUNNEL_PORT
 
@@ -34,11 +30,10 @@ This orb provides commands to:
 
 ### Setup
 
-Sets up an CircleCI tunnel by creating an IP policy rule for the current CircleCI build's IP address.
+Sets up a CircleCI tunnel by registering the executor's IP address via the site-to-site API using OIDC authentication.
 
 **Parameters:**
-- `ngrok-api-token` (env_var_name): Name of the env var containing the Ngrok API token (default: `NGROK_API_TOKEN`)
-- `ip-policy-id` (env_var_name): Name of the env var containing the IP policy ID (default: `IP_POLICY_ID`)
+
 - `tunnel-address` (env_var_name): Name of the env var containing the tunnel address (default: `TUNNEL_ADDRESS`)
 - `tunnel-port` (env_var_name): Name of the env var containing the tunnel port (default: `TUNNEL_PORT`)
 - `verify-tunnel` (boolean): Verifies tunnel or fails the step (default: `true`)
@@ -46,10 +41,11 @@ Sets up an CircleCI tunnel by creating an IP policy rule for the current CircleC
 - `debug` (boolean): Enable debug logging (prints the curl command), default: `false`
 
 **Exports:**
-- `REPO_URL`: SSH URL to the repository via circleci tunnel
-- `IPR_ID`: IP policy rule ID for cleanup
+
+- `EXECUTOR_IP`: The executor's IP address, used by cleanup
 
 Note on env_var_name parameters:
+
 - These parameters expect the NAME of an environment variable, not the value. The orb resolves the actual values at runtime via indirect expansion.
 
 ### checkout
@@ -57,6 +53,7 @@ Note on env_var_name parameters:
 Checks out code from a private repository via the circleci tunnel.
 
 **Parameters:**
+
 - `tunnel-address` (env_var_name): Name of the env var containing the tunnel address (default: `TUNNEL_ADDRESS`)
 - `tunnel-port` (env_var_name): Name of the env var containing the tunnel port (default: `TUNNEL_PORT`)
 - `git-url` (string): Repository URL (supports SSH scp-like `git@host:org/repo.git` and HTTPS/SSH URLs)
@@ -65,10 +62,10 @@ Checks out code from a private repository via the circleci tunnel.
 
 ### cleanup
 
-Removes the IP policy rule created during setup to clean up tunnel access.
+Removes the executor's IP from the allowlist via the site-to-site API. This command should be run with `when: always` to ensure cleanup happens even if previous steps fail.
 
 **Parameters:**
-- `ngrok-api-token` (env_var_name): Name of the env var containing the Ngrok API token (default: `NGROK_API_TOKEN`)
+
 - `debug` (boolean): Enable debug logging, default: `false`
 
 ## Example Usage
@@ -80,10 +77,6 @@ orbs:
   site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
 
 parameters:
-  ngrok-api-token:
-    type: env_var_name
-    description: "Environment variable name containing the Ngrok API token"
-    default: NGROK_API_TOKEN
   tunnel-address:
     type: env_var_name
     description: >
@@ -121,7 +114,7 @@ workflows:
     jobs:
       - build-with-private-repo:
           context:
-            - ngrok-credentials
+            - site-to-site-tunnel
 ```
 
 ## Resources
