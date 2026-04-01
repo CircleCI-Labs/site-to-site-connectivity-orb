@@ -46,8 +46,8 @@ if [[ -n "${DEBUG:-}" ]]; then
     "https://internal.circleci.com/api/private/site-to-site/ip-policy/register"
 fi
 
-max_attempts="${PARAM_REGISTRATION_RETRY_ATTEMPTS:-3}"
-retry_delay="${PARAM_REGISTRATION_RETRY_DELAY:-5}"
+max_attempts="${PARAM_REG_RETRY_ATTEMPTS:-3}"
+retry_delay="${PARAM_REG_RETRY_DELAY:-5}"
 attempt=0
 http_code=0
 until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do

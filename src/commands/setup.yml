@@ -43,8 +43,8 @@ steps:
         PARAM_TUNNEL_PORT: << parameters.tunnel-port >>
         PARAM_VERIFY_TUNNEL: << parameters.verify-tunnel >>
         PARAM_VERIFY_TUNNEL_ATTEMPTS: << parameters.verify-tunnel-attempts >>
-        PARAM_REGISTRATION_RETRY_ATTEMPTS: << parameters.registration-retry-attempts >>
-        PARAM_REGISTRATION_RETRY_DELAY: << parameters.registration-retry-delay >>
+        PARAM_REG_RETRY_ATTEMPTS: << parameters.registration-retry-attempts >>
+        PARAM_REG_RETRY_DELAY: << parameters.registration-retry-delay >>
         DEBUG: << parameters.debug >>
       name: Setup the CircleCI tunnel
       command: <<include(scripts/setup.sh)>>
