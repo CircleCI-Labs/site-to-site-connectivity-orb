@@ -46,18 +46,36 @@ if [[ -n "${DEBUG:-}" ]]; then
     "https://internal.circleci.com/api/private/site-to-site/ip-policy/register"
 fi
 
-http_code=$(curl -s -o /dev/null -w "%{http_code}" \
-  -H 'Accept: application/json' \
-  -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"ip":"'"${ip}"'"}' \
-  "https://internal.circleci.com/api/private/site-to-site/ip-policy/register")
+max_attempts="${PARAM_REGISTRATION_RETRY_ATTEMPTS:-3}"
+retry_delay="${PARAM_REGISTRATION_RETRY_DELAY:-5}"
+attempt=0
+http_code=0
+until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do
+  attempt=$((attempt + 1))
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H 'Accept: application/json' \
+    -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
+    -H "Content-Type: application/json" \
+    -d '{"ip":"'"${ip}"'"}' \
+    "https://internal.circleci.com/api/private/site-to-site/ip-policy/register")
 
-if [ "$http_code" -ne 200 ]; then
-  echo "Error: IP registration failed (HTTP ${http_code})"
+  if [ "$http_code" -eq 200 ]; then
+    break
+  fi
+
+  echo "Error: IP registration failed (HTTP ${http_code}) on attempt ${attempt}/${max_attempts}"
   if [ "$http_code" -eq 404 ]; then
     echo "This typically indicates an OIDC authentication issue."
+    break
   fi
+  if [ "$http_code" -eq 500 ] && [ "$attempt" -lt "$max_attempts" ]; then
+    echo "Retrying in ${retry_delay} seconds..."
+    sleep "${retry_delay}"
+  fi
+done
+
+if [ "$http_code" -ne 200 ]; then
+  echo "Error: IP registration failed after ${attempt} attempt(s) (HTTP ${http_code})"
   exit 1
 fi
 
