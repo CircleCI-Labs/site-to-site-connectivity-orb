@@ -23,6 +23,14 @@ parameters:
     type: integer
     description: "Number of attempts before failing to verify the tunnel"
     default: 30
+  registration-retry-attempts:
+    type: integer
+    description: "Number of retry attempts for IP registration on 500 errors"
+    default: 5
+  registration-retry-delay:
+    type: integer
+    description: "Seconds to wait between IP registration retry attempts"
+    default: 30
   debug:
     type: boolean
     description: "Enable debug mode"
@@ -35,6 +43,8 @@ steps:
         PARAM_TUNNEL_PORT: << parameters.tunnel-port >>
         PARAM_VERIFY_TUNNEL: << parameters.verify-tunnel >>
         PARAM_VERIFY_TUNNEL_ATTEMPTS: << parameters.verify-tunnel-attempts >>
+        PARAM_REG_RETRY_ATTEMPTS: << parameters.registration-retry-attempts >>
+        PARAM_REG_RETRY_DELAY: << parameters.registration-retry-delay >>
         DEBUG: << parameters.debug >>
       name: Setup the CircleCI tunnel
       command: <<include(scripts/setup.sh)>>

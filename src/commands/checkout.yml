@@ -25,6 +25,7 @@ parameters:
   checkout-depth:
     type: integer
     description: "Depth to pass to `git clone` command as `--depth` parameter"
+    default: 1
   debug:
     type: boolean
     description: "Enable debug mode"
