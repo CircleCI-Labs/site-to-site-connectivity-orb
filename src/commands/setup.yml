@@ -26,11 +26,11 @@ parameters:
   registration-retry-attempts:
     type: integer
     description: "Number of retry attempts for IP registration on 500 errors"
-    default: 3
+    default: 5
   registration-retry-delay:
     type: integer
     description: "Seconds to wait between IP registration retry attempts"
-    default: 5
+    default: 30
   debug:
     type: boolean
     description: "Enable debug mode"
