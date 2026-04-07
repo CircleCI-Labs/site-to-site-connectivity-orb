@@ -41,7 +41,7 @@ REPO_URL="ssh://git@${resolved_tunnel_address}:${resolved_tunnel_port}/${REPO_PA
 echo "Constructed repository URL: ${REPO_URL}"
 
 # Create the SSH directory if it doesn't exist
-mkdir ~/.ssh || true
+[ ! -d ~/.ssh ] && mkdir -p ~/.ssh
 
 # Scan the SSH key for the repository
 ssh-keyscan -p "${resolved_tunnel_port}" "${resolved_tunnel_address}" >> ~/.ssh/known_hosts
@@ -58,10 +58,10 @@ fi
 # Determine what to clone (branch or tag)
 if [ -n "${CIRCLE_BRANCH:-}" ]; then
   echo "Cloning branch: ${CIRCLE_BRANCH}"
-  GIT_TERMINAL_PROMPT=0 git clone --branch ${CIRCLE_BRANCH} --single-branch ${depth_arg} "$REPO_URL" "${CHECKOUT_FOLDER}"
+  GIT_TERMINAL_PROMPT=0 git clone --branch "${CIRCLE_BRANCH}" --single-branch ${depth_arg} "$REPO_URL" "${CHECKOUT_FOLDER}"
 elif [ -n "${CIRCLE_TAG:-}" ]; then
   echo "Cloning tag: ${CIRCLE_TAG}"
-  GIT_TERMINAL_PROMPT=0 git clone --branch ${CIRCLE_TAG} --single-branch ${depth_arg} "$REPO_URL" "${CHECKOUT_FOLDER}"
+  GIT_TERMINAL_PROMPT=0 git clone --branch "${CIRCLE_TAG}" --single-branch ${depth_arg} "$REPO_URL" "${CHECKOUT_FOLDER}"
 else
   echo "Error: Neither CIRCLE_BRANCH nor CIRCLE_TAG is set"
   exit 1

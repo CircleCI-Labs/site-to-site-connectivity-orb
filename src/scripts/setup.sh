@@ -82,7 +82,7 @@ fi
 if [[ -n "${PARAM_VERIFY_TUNNEL:-}" ]]; then
   echo "Verifying the connection before exiting"
   verified=0
-  for i in $(seq 1 ${PARAM_VERIFY_TUNNEL_ATTEMPTS:-}); do
+  for i in $(seq 1 "${PARAM_VERIFY_TUNNEL_ATTEMPTS:-}"); do
     echo "Attempt $i"
     set +e +o pipefail
     timeout 1s nc -v "${resolved_tunnel_address}" "${resolved_tunnel_port}"
