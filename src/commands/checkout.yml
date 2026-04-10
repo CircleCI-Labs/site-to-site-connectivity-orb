@@ -43,3 +43,5 @@ steps:
         DEBUG: << parameters.debug >>
       name: Clone repo
       command: <<include(scripts/checkout.sh)>>
+      max_auto_reruns: 3
+      auto_rerun_delay: 10s
