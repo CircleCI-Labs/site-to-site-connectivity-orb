@@ -1,31 +1,14 @@
 ---
 description: >
   Example workflow demonstrating how to use the site to site connectivity
-  orb to access private repositories via CircleCI tunnel.
+  orb to access private repositories via CircleCI tunnel. After setup, use
+  the built-in checkout step — SSH is routed through tunnel-proxy automatically.
 
 usage:
   version: 2.1
 
-orbs:
-  site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
-
-  parameters:
-    tunnel-address:
-      type: env_var_name
-      description: >
-        Environment variable name containing the tunnel address for the
-        CircleCI tunnel
-      default: "TUNNEL_ADDRESS"
-    tunnel-port:
-      type: env_var_name
-      description: >
-        Environment variable name containing the tunnel port for the
-        CircleCI tunnel
-      default: "TUNNEL_PORT"
-    debug:
-      type: boolean
-      description: "Enable debug mode"
-      default: false
+  orbs:
+    site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
 
   jobs:
     build-with-private-repo:
@@ -33,14 +16,13 @@ orbs:
         - image: cimg/base:current
       steps:
         - site-to-site-connectivity/setup
-        - site-to-site-connectivity/checkout:
-            git-url: << pipeline.parameters.git-url >>
+        - checkout
         - run:
             name: Build application
             command: |
-              # Your build commands here
               echo "Building application..."
-        - site-to-site-connectivity/cleanup
+        - site-to-site-connectivity/cleanup:
+            when: always
 
   workflows:
     private-repo-workflow:

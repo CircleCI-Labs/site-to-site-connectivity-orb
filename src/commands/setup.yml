@@ -1,28 +1,14 @@
 ---
 description: >
-  Setup CircleCI tunnel for site to site connectivity
+  Setup CircleCI tunnel for site to site connectivity. Configures HTTPS_PROXY
+  and SSH ProxyCommand so subsequent steps (including the built-in checkout)
+  can reach private infrastructure through the tunnel.
 
 parameters:
-  tunnel-address:
-    type: env_var_name
-    description: >
-      Environment variable name containing the tunnel address for the
-      CircleCI tunnel
-    default: "TUNNEL_ADDRESS"
-  tunnel-port:
-    type: env_var_name
-    description: >
-      Environment variable name containing the tunnel port for the
-      CircleCI tunnel
-    default: "TUNNEL_PORT"
-  verify-tunnel:
-    type: boolean
-    description: "Verify the connection before exiting"
-    default: true
-  verify-tunnel-attempts:
-    type: integer
-    description: "Number of attempts before failing to verify the tunnel"
-    default: 30
+  tunnel-proxy-version:
+    type: string
+    description: "Version of tunnel-proxy to download"
+    default: "latest"
   registration-retry-attempts:
     type: integer
     description: "Number of retry attempts for IP registration on 500 errors"
@@ -31,6 +17,18 @@ parameters:
     type: integer
     description: "Seconds to wait between IP registration retry attempts"
     default: 30
+  no-proxy:
+    type: string
+    description: "Additional comma-separated hosts to exclude from the proxy"
+    default: ""
+  verify-tunnel:
+    type: boolean
+    description: "Verify the connection before exiting"
+    default: true
+  verify-tunnel-attempts:
+    type: integer
+    description: "Number of attempts to verify each tunnel is reachable"
+    default: 5
   debug:
     type: boolean
     description: "Enable debug mode"
@@ -39,12 +37,12 @@ parameters:
 steps:
   - run:
       environment:
-        PARAM_TUNNEL_ADDRESS: << parameters.tunnel-address >>
-        PARAM_TUNNEL_PORT: << parameters.tunnel-port >>
-        PARAM_VERIFY_TUNNEL: << parameters.verify-tunnel >>
-        PARAM_VERIFY_TUNNEL_ATTEMPTS: << parameters.verify-tunnel-attempts >>
+        PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
         PARAM_REG_RETRY_ATTEMPTS: << parameters.registration-retry-attempts >>
         PARAM_REG_RETRY_DELAY: << parameters.registration-retry-delay >>
+        PARAM_NO_PROXY: << parameters.no-proxy >>
+        PARAM_VERIFY_TUNNEL: << parameters.verify-tunnel >>
+        PARAM_VERIFY_TUNNEL_ATTEMPTS: << parameters.verify-tunnel-attempts >>
         DEBUG: << parameters.debug >>
       name: Setup the CircleCI tunnel
       command: <<include(scripts/setup.sh)>>
