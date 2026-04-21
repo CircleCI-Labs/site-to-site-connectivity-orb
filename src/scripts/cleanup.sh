@@ -19,7 +19,7 @@ fi
 
 echo "Cleaning up CircleCI tunnel for IP: ${EXECUTOR_IP}"
 
-if [[ -n "${DEBUG:-}" ]]; then
+if [[ "${DEBUG:-}" == "true" ]]; then
   echo "DEBUG curl command:"
   echo curl -H 'Accept: application/json' \
     -H "Authorization: Bearer \${CIRCLE_OIDC_TOKEN}" \

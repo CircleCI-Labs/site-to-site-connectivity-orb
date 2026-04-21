@@ -14,59 +14,47 @@ CircleCI Labs, including this repo, is a collection of solutions developed by me
 
 ## Overview
 
-This orb provides commands to:
+This orb:
 
-- Set up CircleCI tunnels with IP policy rules for secure access
-- Checkout code from private repositories through the tunnel
-- Clean up tunnel resources after the build
-
-## Prerequisites
-
-- A CircleCI context with the following environment variables:
-  - TUNNEL_ADDRESS
-  - TUNNEL_PORT
+1. Sets up CircleCI tunnels with IP rules for secure access
+2. Configures HTTPS and SSH routing transparently for subsequent steps
+3. Deregisters the executor IP on cleanup
 
 ## Commands
 
-### Setup
+### `setup`
 
-Sets up a CircleCI tunnel by registering the executor's IP address via the site-to-site API using OIDC authentication.
-
-**Parameters:**
-
-- `tunnel-address` (env_var_name): Name of the env var containing the tunnel address (default: `TUNNEL_ADDRESS`)
-- `tunnel-port` (env_var_name): Name of the env var containing the tunnel port (default: `TUNNEL_PORT`)
-- `verify-tunnel` (boolean): Verifies tunnel or fails the step (default: `true`)
-- `verify-tunnel-attempts` (integer): Number of attempts before abandoning the tunnel (default: `30`)
-- `debug` (boolean): Enable debug logging (prints the curl command), default: `false`
-
-**Exports:**
-
-- `EXECUTOR_IP`: The executor's IP address, used by cleanup
-
-Note on env_var_name parameters:
-
-- These parameters expect the NAME of an environment variable, not the value. The orb resolves the actual values at runtime via indirect expansion.
-
-### checkout
-
-Checks out code from a private repository via the circleci tunnel.
+Registers the executor IP, discovers tunnel endpoints, downloads `tunnel-proxy`, and configures both HTTPS and SSH routing.
 
 **Parameters:**
 
-- `tunnel-address` (env_var_name): Name of the env var containing the tunnel address (default: `TUNNEL_ADDRESS`)
-- `tunnel-port` (env_var_name): Name of the env var containing the tunnel port (default: `TUNNEL_PORT`)
-- `git-url` (string): Repository URL (supports SSH scp-like `git@host:org/repo.git` and HTTPS/SSH URLs)
-- `checkout-folder` (string): Folder to clone the repository into (default: `~/project`)
-- `debug` (boolean): Enable debug logging (prints derived values), default: `false`
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `tunnel-proxy-version` | string | `latest` | Version of `tunnel-proxy` to download (e.g. `v1.2.3`) |
+| `registration-retry-attempts` | integer | `5` | Max retry attempts for IP registration and tunnel-details on 500 errors |
+| `registration-retry-delay` | integer | `30` | Seconds between retry attempts |
+| `no-proxy` | string | `""` | Additional comma-separated hosts to exclude from the HTTPS proxy |
+| `debug` | boolean | `false` | Enable debug logging |
 
-### cleanup
+**Exports to subsequent steps:**
 
-Removes the executor's IP from the allowlist via the site-to-site API. This command should be run with `when: always` to ensure cleanup happens even if previous steps fail.
+| Variable | Value |
+|----------|-------|
+| `EXECUTOR_IP` | The executor's public IP (used by `cleanup`) |
+| `HTTPS_PROXY` | `http://127.0.0.1:4140` — set when at least one `vcs` tunnel exists |
+| `NO_PROXY` | `localhost,127.0.0.1,circleci.com,*.circleci.com` — set alongside `HTTPS_PROXY` |
+
+**SSH config:** An `~/.ssh/config` `Host` entry with a `ProxyCommand` is written for each `vcs-ssh` tunnel, so the built-in `checkout` step works without additional configuration.
+
+### `cleanup`
+
+Deregisters the executor IP from the site-to-site allowlist. Run with `when: always` to ensure it executes even if earlier steps fail.
 
 **Parameters:**
 
-- `debug` (boolean): Enable debug logging, default: `false`
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `debug` | boolean | `false` | Enable debug logging |
 
 ## Example Usage
 
@@ -74,45 +62,25 @@ Removes the executor's IP from the allowlist via the site-to-site API. This comm
 version: 2.1
 
 orbs:
-  site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
-
-parameters:
-  tunnel-address:
-    type: env_var_name
-    description: >
-      Environment variable name containing the tunnel address for the
-      CircleCI tunnel
-    default: "TUNNEL_ADDRESS"
-  tunnel-port:
-    type: env_var_name
-    description: >
-      Environment variable name containing the tunnel port for the
-      CircleCI tunnel
-    default: "TUNNEL_PORT"
-  debug:
-    type: boolean
-    description: "Enable debug mode"
-    default: false
+  site-to-site-connectivity: cci-labs/site-to-site-connectivity@1.0.0
 
 jobs:
-  build-with-private-repo:
+  build:
     docker:
       - image: cimg/base:current
     steps:
       - site-to-site-connectivity/setup
-      - site-to-site-connectivity/checkout:
-          git-url: << pipeline.parameters.git-url >>
+      - checkout
       - run:
-          name: Build application
-          command: |
-            # Your build commands here
-            echo "Building application..."
-      - site-to-site-connectivity/cleanup
+          name: Build
+          command: make build
+      - site-to-site-connectivity/cleanup:
+          when: always
 
 workflows:
-  private-repo-workflow:
+  main:
     jobs:
-      - build-with-private-repo:
+      - build:
           context:
             - site-to-site-tunnel
 ```
@@ -127,7 +95,7 @@ We welcome [issues](https://github.com/CircleCI-Labs/site-to-site-connectivity-o
 
 1. Merge pull requests with desired changes to the main branch.
 2. Find the current version of the orb.
-   - You can run `circleci orb info your-namespace/site-to-site-connectivity | grep "Latest"` to see the current version.
+   - You can run `circleci orb info cci-labs/site-to-site-connectivity | grep "Latest"` to see the current version.
 3. Create a [new Release](https://github.com/CircleCI-Labs/site-to-site-connectivity-orb/releases/new) on GitHub.
    - Click "Choose a tag" and create a new [semantically versioned](http://semver.org/) tag. (ex: v1.0.0)
 4. Click "Publish Release".
