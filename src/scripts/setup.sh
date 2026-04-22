@@ -127,7 +127,8 @@ done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "h
 
 if [ "${#serve_args[@]}" -gt 0 ]; then
   echo "Starting tunnel-proxy serve"
-  "${proxy_bin}" serve "${serve_args[@]}" &
+  nohup "${proxy_bin}" serve "${serve_args[@]}" >/tmp/tunnel-proxy.log 2>&1 &
+  disown
   echo "export HTTPS_PROXY=\"http://127.0.0.1:4140\"" >>"$BASH_ENV"
   # Exclude system/CircleCI domains from the proxy; the proxy 403s unknown hosts.
   no_proxy="localhost,127.0.0.1,circleci.com,*.circleci.com"

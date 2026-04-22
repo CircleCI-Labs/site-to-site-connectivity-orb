@@ -46,3 +46,9 @@ steps:
         DEBUG: << parameters.debug >>
       name: Setup the CircleCI tunnel
       command: <<include(scripts/setup.sh)>>
+  - run:
+      name: tunnel-proxy logs
+      background: true
+      command: |
+        touch /tmp/tunnel-proxy.log
+        tail -f /tmp/tunnel-proxy.log
