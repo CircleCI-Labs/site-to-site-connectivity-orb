@@ -171,7 +171,7 @@ if [[ -n "${PARAM_VERIFY_TUNNEL:-}" ]]; then
         [[ "$response" == "SSH-" ]] && verified=1
       else
         # Any HTTP response (even an error) confirms the tunnel is routing traffic
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+        http_code=$(curl -k -s -o /dev/null -w "%{http_code}" \
           --connect-timeout 5 --max-time 5 \
           --proxy http://127.0.0.1:4140 \
           "https://${internal_host}/" 2>/dev/null || true)
