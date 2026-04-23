@@ -121,13 +121,14 @@ echo "export PATH=\"$(dirname "${proxy_bin}"):\$PATH\"" >>"$BASH_ENV"
 # Start HTTP CONNECT proxy daemon for HTTPS traffic — one --tunnel per vcs mapping
 serve_args=()
 while IFS=$'\t' read -r host domain; do
-  serve_args+=("--tunnel" "${host}=${domain}:4443")
-  echo "  HTTPS tunnel: ${host} -> ${domain}:4443"
+  serve_args+=("--tunnel" "${host}=tls://${domain}:443")
+  echo "  HTTPS tunnel: ${host} -> tls://${domain}:443"
 done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "https") | [.internal_host, .tunnel_domain] | @tsv')
 
 if [ "${#serve_args[@]}" -gt 0 ]; then
   echo "Starting tunnel-proxy serve"
-  "${proxy_bin}" serve "${serve_args[@]}" &
+  nohup "${proxy_bin}" serve "${serve_args[@]}" >/tmp/tunnel-proxy.log 2>&1 &
+  disown
   echo "export HTTPS_PROXY=\"http://127.0.0.1:4140\"" >>"$BASH_ENV"
   # Exclude system/CircleCI domains from the proxy; the proxy 403s unknown hosts.
   no_proxy="localhost,127.0.0.1,circleci.com,*.circleci.com"
@@ -171,7 +172,7 @@ if [[ -n "${PARAM_VERIFY_TUNNEL:-}" ]]; then
         [[ "$response" == "SSH-" ]] && verified=1
       else
         # Any HTTP response (even an error) confirms the tunnel is routing traffic
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+        http_code=$(curl -k -s -o /dev/null -w "%{http_code}" \
           --connect-timeout 5 --max-time 5 \
           --proxy http://127.0.0.1:4140 \
           "https://${internal_host}/" 2>/dev/null || true)
