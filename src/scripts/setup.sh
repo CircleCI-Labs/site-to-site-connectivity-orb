@@ -121,8 +121,8 @@ echo "export PATH=\"$(dirname "${proxy_bin}"):\$PATH\"" >>"$BASH_ENV"
 # Start HTTP CONNECT proxy daemon for HTTPS traffic — one --tunnel per vcs mapping
 serve_args=()
 while IFS=$'\t' read -r host domain; do
-  serve_args+=("--tunnel" "${host}=${domain}:443")
-  echo "  HTTPS tunnel: ${host} -> ${domain}:443"
+  serve_args+=("--tunnel" "${host}=tls://${domain}:443")
+  echo "  HTTPS tunnel: ${host} -> tls://${domain}:443"
 done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "https") | [.internal_host, .tunnel_domain] | @tsv')
 
 if [ "${#serve_args[@]}" -gt 0 ]; then
