@@ -46,7 +46,7 @@ if [ "${#serve_args[@]}" -gt 0 ]; then
   # disown is deferred until after the readiness check so bash can reap the
   # child if it crashes, making kill -0 a reliable liveness signal
   proxy_ready=0
-  for i in $(seq 1 10); do
+  for _ in $(seq 1 10); do
     sleep 0.5
     if ! kill -0 "$proxy_pid" 2>/dev/null; then
       echo "Error: tunnel-proxy exited unexpectedly"

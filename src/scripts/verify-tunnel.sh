@@ -9,7 +9,7 @@ echo "Verifying tunnel connectivity"
 while IFS=$'\t' read -r service_type internal_host tunnel_domain; do
   echo "  Verifying: ${internal_host} -> ${tunnel_domain}:443 (${service_type})"
   verified=0
-  for i in $(seq 1 "${PARAM_VERIFY_TUNNEL_ATTEMPTS:-5}"); do
+  for i in $(seq 1 "${PARAM_VT_ATTEMPTS:-5}"); do
     echo "  Attempt $i"
     set +e +o pipefail
     if [[ "$service_type" == "ssh" ]]; then
