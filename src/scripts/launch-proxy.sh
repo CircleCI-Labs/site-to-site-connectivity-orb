@@ -42,7 +42,30 @@ done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "h
 if [ "${#serve_args[@]}" -gt 0 ]; then
   echo "Starting tunnel-proxy serve"
   nohup "${proxy_bin}" serve "${serve_args[@]}" >/tmp/tunnel-proxy.log 2>&1 &
-  disown
+  proxy_pid=$!
+  # disown is deferred until after the readiness check so bash can reap the
+  # child if it crashes, making kill -0 a reliable liveness signal
+  proxy_ready=0
+  for i in $(seq 1 10); do
+    sleep 0.5
+    if ! kill -0 "$proxy_pid" 2>/dev/null; then
+      echo "Error: tunnel-proxy exited unexpectedly"
+      cat /tmp/tunnel-proxy.log >&2
+      exit 1
+    fi
+    if (echo >/dev/tcp/127.0.0.1/4140) 2>/dev/null; then
+      proxy_ready=1
+      break
+    fi
+  done
+  if [ "$proxy_ready" -eq 0 ]; then
+    echo "Error: tunnel-proxy did not bind to port 4140 within 5 seconds"
+    kill "$proxy_pid" 2>/dev/null || true
+    cat /tmp/tunnel-proxy.log >&2
+    exit 1
+  fi
+  disown "$proxy_pid"
+
   echo "export HTTPS_PROXY=\"http://127.0.0.1:4140\"" >>"$BASH_ENV"
   # Exclude system/CircleCI domains from the proxy; the proxy 403s unknown hosts.
   no_proxy="localhost,127.0.0.1,circleci.com,*.circleci.com"

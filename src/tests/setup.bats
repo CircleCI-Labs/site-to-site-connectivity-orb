@@ -20,10 +20,10 @@ setup() {
   unset PARAM_TUNNEL_PROXY_VERSION
 
   write_curl_mock "$MOCK_SINGLE_TUNNEL"
-  mock_cmd tunnel-proxy 0 ""
 }
 
 teardown() {
+  fuser -k 4140/tcp 2>/dev/null || true
   rm -rf "$TEST_TMP"
 }
 
@@ -194,4 +194,28 @@ CURLEOF
   [ "$status" -eq 0 ]
   grep -q 'NO_PROXY=.*internal.corp.test' "$BASH_ENV"
   grep -q 'NO_PROXY=.*circleci.com' "$BASH_ENV"
+}
+
+@test "launch-proxy fails and dumps log when tunnel-proxy crashes on startup" {
+  local crash_stub="$MOCK_BIN/crash-stub"
+  printf '#!/bin/bash\nif [[ "$1" == "serve" ]]; then echo "fatal: failed to initialize" >&2; exit 1; fi\nexit 0\n' > "$crash_stub"
+  chmod +x "$crash_stub"
+  write_curl_mock_with_stub "$MOCK_SINGLE_TUNNEL" "$crash_stub"
+
+  bash src/scripts/register.sh
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"exited unexpectedly"* ]]
+}
+
+@test "launch-proxy fails and dumps log when tunnel-proxy does not bind to port 4140" {
+  local sleep_stub="$MOCK_BIN/sleep-stub"
+  printf '#!/bin/bash\nif [[ "$1" == "serve" ]]; then sleep 30; fi\nexit 0\n' > "$sleep_stub"
+  chmod +x "$sleep_stub"
+  write_curl_mock_with_stub "$MOCK_SINGLE_TUNNEL" "$sleep_stub"
+
+  bash src/scripts/register.sh
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"did not bind to port 4140"* ]]
 }
