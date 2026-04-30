@@ -61,6 +61,6 @@ steps:
         - run:
             name: Verify tunnel connectivity
             environment:
-              PARAM_VT_ATTEMPTS: << parameters.verify-tunnel-attempts >>
+              PARAM_VERIFY_ATTEMPTS: << parameters.verify-tunnel-attempts >>
               DEBUG: << parameters.debug >>
             command: <<include(scripts/verify-tunnel.sh)>>

@@ -2,14 +2,14 @@
 
 set -eu -o pipefail
 
-tunnel_details="$(cat "${TMPDIR:-/tmp/}tunnel_details.json")"
-proxy_bin="${TMPDIR:-/tmp/}tunnel-proxy"
+tunnel_details="$(cat "${TMPDIR:-/tmp}/tunnel_details.json")"
+proxy_bin="${TMPDIR:-/tmp}/tunnel-proxy"
 
 echo "Verifying tunnel connectivity"
 while IFS=$'\t' read -r service_type internal_host tunnel_domain; do
   echo "  Verifying: ${internal_host} -> ${tunnel_domain}:443 (${service_type})"
   verified=0
-  for i in $(seq 1 "${PARAM_VT_ATTEMPTS:-5}"); do
+  for i in $(seq 1 "${PARAM_VERIFY_ATTEMPTS:-5}"); do
     echo "  Attempt $i"
     set +e +o pipefail
     if [[ "$service_type" == "ssh" ]]; then

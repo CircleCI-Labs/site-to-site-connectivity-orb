@@ -2,7 +2,7 @@
 
 set -eu -o pipefail
 
-tunnel_details="$(cat "${TMPDIR:-/tmp/}tunnel_details.json")"
+tunnel_details="$(cat "${TMPDIR:-/tmp}/tunnel_details.json")"
 
 # Detect OS and architecture for binary download
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -16,7 +16,7 @@ aarch64 | arm64) arch="arm64" ;;
   ;;
 esac
 
-proxy_bin="${TMPDIR:-/tmp/}tunnel-proxy"
+proxy_bin="${TMPDIR:-/tmp}/tunnel-proxy"
 proxy_version="${PARAM_TUNNEL_PROXY_VERSION:-latest}"
 
 if [ "$proxy_version" = "latest" ]; then

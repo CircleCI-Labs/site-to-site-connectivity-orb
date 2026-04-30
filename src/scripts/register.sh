@@ -90,5 +90,5 @@ if [ "$tunnel_count" -eq 0 ]; then
   exit 1
 fi
 
-echo "$tunnel_details" > "${TMPDIR:-/tmp/}tunnel_details.json"
+echo "$tunnel_details" > "${TMPDIR:-/tmp}/tunnel_details.json"
 echo "export EXECUTOR_IP=\"${ip}\"" >>"$BASH_ENV"

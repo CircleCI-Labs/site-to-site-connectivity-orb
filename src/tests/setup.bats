@@ -23,7 +23,7 @@ setup() {
 }
 
 teardown() {
-  fuser -k 4140/tcp 2>/dev/null || true
+  lsof -ti tcp:4140 2>/dev/null | xargs kill 2>/dev/null || true
   rm -rf "$TEST_TMP"
 }
 
