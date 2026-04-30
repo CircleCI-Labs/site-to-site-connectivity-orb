@@ -155,7 +155,7 @@ echo "export EXECUTOR_IP=\"${ip}\"" >>"$BASH_ENV"
 # shellcheck source=/dev/null
 source "$BASH_ENV"
 
-if [[ -n "${PARAM_VERIFY_TUNNEL:-}" ]]; then
+if [[ "${PARAM_VERIFY_TUNNEL:-}" == "true" ]]; then
   echo "Verifying tunnel connectivity"
   while IFS=$'\t' read -r service_type internal_host tunnel_domain; do
     echo "  Verifying: ${internal_host} -> ${tunnel_domain}:443 (${service_type})"
