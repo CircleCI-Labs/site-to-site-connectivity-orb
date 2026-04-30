@@ -36,19 +36,31 @@ parameters:
 
 steps:
   - run:
+      name: Authorize tunnel and fetch configuration
       environment:
-        PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
         PARAM_REG_RETRY_ATTEMPTS: << parameters.registration-retry-attempts >>
         PARAM_REG_RETRY_DELAY: << parameters.registration-retry-delay >>
-        PARAM_NO_PROXY: << parameters.no-proxy >>
-        PARAM_VERIFY_TUNNEL: << parameters.verify-tunnel >>
-        PARAM_VERIFY_TUNNEL_ATTEMPTS: << parameters.verify-tunnel-attempts >>
         DEBUG: << parameters.debug >>
-      name: Setup the CircleCI tunnel
-      command: <<include(scripts/setup.sh)>>
+      command: <<include(scripts/register.sh)>>
+  - run:
+      name: Launch tunnel proxy
+      environment:
+        PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
+        PARAM_NO_PROXY: << parameters.no-proxy >>
+        DEBUG: << parameters.debug >>
+      command: <<include(scripts/launch-proxy.sh)>>
   - run:
       name: tunnel-proxy logs
       background: true
       command: |
         touch /tmp/tunnel-proxy.log
         tail -f /tmp/tunnel-proxy.log
+  - when:
+      condition: << parameters.verify-tunnel >>
+      steps:
+        - run:
+            name: Verify tunnel connectivity
+            environment:
+              PARAM_VERIFY_TUNNEL_ATTEMPTS: << parameters.verify-tunnel-attempts >>
+              DEBUG: << parameters.debug >>
+            command: <<include(scripts/verify-tunnel.sh)>>
