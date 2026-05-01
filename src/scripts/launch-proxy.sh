@@ -23,21 +23,25 @@ esac
 ext=""
 [ "$os" = "windows" ] && ext=".exe"
 
-proxy_bin="${TMPDIR:-/tmp}/tunnel-proxy${ext}"
+mkdir -p /tmp/tunnel-proxy-bin
+proxy_bin="/tmp/tunnel-proxy-bin/tunnel-proxy${ext}"
 proxy_version="${PARAM_TUNNEL_PROXY_VERSION:-latest}"
 
-if [ "$proxy_version" = "latest" ]; then
-  download_url="https://github.com/CircleCI-Labs/site-to-site-tunnel-proxy/releases/latest/download/tunnel-proxy_${os}_${arch}${ext}"
+if [ ! -f "${proxy_bin}" ]; then
+  if [ "$proxy_version" = "latest" ]; then
+    download_url="https://github.com/CircleCI-Labs/site-to-site-tunnel-proxy/releases/latest/download/tunnel-proxy_${os}_${arch}${ext}"
+  else
+    download_url="https://github.com/CircleCI-Labs/site-to-site-tunnel-proxy/releases/download/${proxy_version}/tunnel-proxy_${os}_${arch}${ext}"
+  fi
+  echo "Downloading tunnel-proxy from ${download_url}"
+  curl -fsSL -o "${proxy_bin}" "${download_url}"
+  chmod +x "${proxy_bin}"
 else
-  download_url="https://github.com/CircleCI-Labs/site-to-site-tunnel-proxy/releases/download/${proxy_version}/tunnel-proxy_${os}_${arch}${ext}"
+  echo "Using cached tunnel-proxy at ${proxy_bin}"
 fi
 
-echo "Downloading tunnel-proxy from ${download_url}"
-curl -fsSL -o "${proxy_bin}" "${download_url}"
-chmod +x "${proxy_bin}"
-
 # Add tunnel-proxy to PATH for subsequent steps (including SSH ProxyCommand lookups)
-echo "export PATH=\"$(dirname "${proxy_bin}"):\$PATH\"" >>"$BASH_ENV"
+echo "export PATH=\"/tmp/tunnel-proxy-bin:\$PATH\"" >>"$BASH_ENV"
 
 # Start HTTP CONNECT proxy daemon for HTTPS traffic — one --tunnel per vcs mapping
 serve_args=()
@@ -51,9 +55,9 @@ if [ "${#serve_args[@]}" -gt 0 ]; then
   if [ "$os" = "windows" ]; then
     # Windows MSYS nohup exists but behaves differently; & disown is sufficient
     # since Windows does not deliver SIGHUP when the parent shell exits
-    "${proxy_bin}" serve "${serve_args[@]}" >"/tmp/tunnel-proxy.log" 2>&1 &
+    "${proxy_bin}" serve "${serve_args[@]}" >"${TMPDIR:-/tmp}/tunnel-proxy.log" 2>&1 &
   else
-    nohup "${proxy_bin}" serve "${serve_args[@]}" >/tmp/tunnel-proxy.log 2>&1 &
+    nohup "${proxy_bin}" serve "${serve_args[@]}" >"${TMPDIR:-/tmp}/tunnel-proxy.log" 2>&1 &
   fi
   proxy_pid=$!
   # disown is deferred until after the readiness check so bash can reap the
@@ -63,7 +67,7 @@ if [ "${#serve_args[@]}" -gt 0 ]; then
     sleep 0.5
     if ! kill -0 "$proxy_pid" 2>/dev/null; then
       echo "Error: tunnel-proxy exited unexpectedly"
-      cat /tmp/tunnel-proxy.log >&2
+      cat "${TMPDIR:-/tmp}/tunnel-proxy.log" >&2
       exit 1
     fi
     if (echo >/dev/tcp/127.0.0.1/4140) 2>/dev/null; then
@@ -74,7 +78,7 @@ if [ "${#serve_args[@]}" -gt 0 ]; then
   if [ "$proxy_ready" -eq 0 ]; then
     echo "Error: tunnel-proxy did not bind to port 4140 within 5 seconds"
     kill "$proxy_pid" 2>/dev/null || true
-    cat /tmp/tunnel-proxy.log >&2
+    cat "${TMPDIR:-/tmp}/tunnel-proxy.log" >&2
     exit 1
   fi
   disown "$proxy_pid"

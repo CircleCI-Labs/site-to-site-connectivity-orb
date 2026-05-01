@@ -23,9 +23,14 @@ if [[ "\$*" == *"tunnel-details"* ]]; then
   echo "200"
   exit 0
 fi
+if [[ "\$*" == *"api.github.com"* ]]; then
+  echo '{"tag_name":"v0.0.3","name":"v0.0.3"}'
+  exit 0
+fi
 got_o=false
 for arg in "\$@"; do
   if \$got_o; then
+    mkdir -p /tmp/tunnel-proxy-bin
     cp "${stub_file}" "\$arg"
     chmod +x "\$arg" 2>/dev/null || true
     exit 0

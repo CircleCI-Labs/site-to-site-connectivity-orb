@@ -12,7 +12,7 @@ esac
 
 ext=""
 [ "$os" = "windows" ] && ext=".exe"
-proxy_bin="${TMPDIR:-/tmp}/tunnel-proxy${ext}"
+proxy_bin="/tmp/tunnel-proxy-bin/tunnel-proxy${ext}"
 
 echo "Verifying tunnel connectivity"
 while IFS=$'\t' read -r service_type internal_host tunnel_domain; do

@@ -17,6 +17,7 @@ if ! command -v jq &>/dev/null; then
       curl -fsSL -o "${jq_bin}" \
         "https://github.com/jqlang/jq/releases/latest/download/jq-windows-amd64.exe"
       export PATH="${TMPDIR:-/tmp/}:${PATH}"
+      echo "export PATH=\"${TMPDIR:-/tmp/}:\$PATH\"" >>"$BASH_ENV"
       ;;
     *)
       echo "Error: jq is required but not installed." >&2
@@ -41,7 +42,7 @@ until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do
     -H 'Accept: application/json' \
     -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d '{"ip":"'"${ip}"'"}' \
+    -d "$(jq -n --arg ip "${ip}" '{"ip":$ip}')" \
     "https://internal.circleci.com/api/private/site-to-site/ip-policy/register")
 
   if [ "$http_code" -eq 200 ]; then

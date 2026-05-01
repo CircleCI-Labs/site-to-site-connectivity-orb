@@ -9,8 +9,17 @@ description: >
 parameters:
   tunnel-proxy-version:
     type: string
-    description: "Version of tunnel-proxy to download"
+    description: >
+      Version of tunnel-proxy to download (e.g. "v0.0.3"). Defaults to
+      "latest" which resolves to the current GitHub release at job start.
+      Pin to a specific version for fully reproducible builds.
     default: "latest"
+  cache-version:
+    type: string
+    description: >
+      Cache key prefix for the tunnel-proxy binary. Increment (e.g. "v2")
+      to force a fresh download and discard any previously cached binary.
+    default: "v1"
   registration-retry-attempts:
     type: integer
     description: "Number of retry attempts for IP registration on 500 errors"
@@ -31,6 +40,12 @@ parameters:
     type: integer
     description: "Number of attempts to verify each tunnel is reachable"
     default: 5
+  cache:
+    type: boolean
+    description: >
+      Cache the tunnel-proxy binary between jobs. Set to false to always
+      download a fresh binary (useful when debugging download issues).
+    default: true
   debug:
     type: boolean
     description: "Enable debug mode"
@@ -45,18 +60,36 @@ steps:
         DEBUG: << parameters.debug >>
       command: <<include(scripts/register.sh)>>
   - run:
+      name: Resolve tunnel-proxy version
+      environment:
+        PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
+      command: <<include(scripts/resolve-version.sh)>>
+  - when:
+      condition: << parameters.cache >>
+      steps:
+        - restore_cache:
+            keys:
+              - << parameters.cache-version >>-tunnel-proxy-{{ checksum "/tmp/.tunnel-proxy-version" }}
+  - run:
       name: Launch tunnel proxy
       environment:
         PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
         PARAM_NO_PROXY: << parameters.no-proxy >>
         DEBUG: << parameters.debug >>
       command: <<include(scripts/launch-proxy.sh)>>
+  - when:
+      condition: << parameters.cache >>
+      steps:
+        - save_cache:
+            key: << parameters.cache-version >>-tunnel-proxy-{{ checksum "/tmp/.tunnel-proxy-version" }}
+            paths:
+              - /tmp/tunnel-proxy-bin
   - run:
       name: tunnel-proxy logs
       background: true
       command: |
-        touch /tmp/tunnel-proxy.log
-        tail -f /tmp/tunnel-proxy.log
+        touch "${TMPDIR:-/tmp}/tunnel-proxy.log"
+        tail -f "${TMPDIR:-/tmp}/tunnel-proxy.log"
   - when:
       condition: << parameters.verify-tunnel >>
       steps:

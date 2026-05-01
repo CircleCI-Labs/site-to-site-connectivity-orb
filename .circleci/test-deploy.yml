@@ -8,12 +8,44 @@ filters: &filters
     only: /.*/
 
 jobs:
-  # You may want to add additional validation steps to ensure the commands are working as expected.
   command-tests:
     docker:
       - image: cimg/base:current
     steps:
       - checkout
+      - run:
+          name: Install bats
+          command: sudo apt-get update -qq && sudo apt-get install -y bats python3
+      - run:
+          name: Run unit tests
+          command: bats src/tests/setup.bats
+
+  linux-smoke-test:
+    machine:
+      image: ubuntu-2204:current
+    steps:
+      - checkout
+      - continuation/setup
+      - run:
+          name: Verify HTTPS_PROXY is set
+          command: |
+            source "$BASH_ENV"
+            [ -n "${HTTPS_PROXY:-}" ] || (echo "HTTPS_PROXY not set" && exit 1)
+      - continuation/cleanup
+
+  macos-smoke-test:
+    macos:
+      xcode: "16.1.0"
+    resource_class: macos.m1.medium.gen1
+    steps:
+      - checkout
+      - continuation/setup
+      - run:
+          name: Verify HTTPS_PROXY is set
+          command: |
+            source "$BASH_ENV"
+            [ -n "${HTTPS_PROXY:-}" ] || (echo "HTTPS_PROXY not set" && exit 1)
+      - continuation/cleanup
 
   windows-smoke-test:
     machine:
@@ -28,10 +60,16 @@ jobs:
 workflows:
   test-deploy:
     jobs:
-      # Make sure to include "filters: *filters" in every test job you want to run as part of your deployment.
       - command-tests:
           filters: *filters
+      - linux-smoke-test:
+          context: site-to-site-tunnel
+          filters: *filters
+      - macos-smoke-test:
+          context: site-to-site-tunnel
+          filters: *filters
       - windows-smoke-test:
+          context: site-to-site-tunnel
           filters: *filters
       - orb-tools/pack:
           filters: *filters
@@ -42,6 +80,9 @@ workflows:
           requires:
             - orb-tools/pack
             - command-tests
+            - linux-smoke-test
+            - macos-smoke-test
+            - windows-smoke-test
           context: orb-publishing
           filters:
             branches:
