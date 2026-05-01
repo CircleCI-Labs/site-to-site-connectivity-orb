@@ -7,6 +7,24 @@ if [ -z "${CIRCLE_OIDC_TOKEN:-}" ]; then
   exit 1
 fi
 
+# jq is required; on Windows it is not pre-installed so download it automatically
+if ! command -v jq &>/dev/null; then
+  os_check="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  case "$os_check" in
+    msys_nt* | msys* | mingw* | cygwin*)
+      echo "jq not found, installing..."
+      jq_bin="${TMPDIR:-/tmp/}jq.exe"
+      curl -fsSL -o "${jq_bin}" \
+        "https://github.com/jqlang/jq/releases/latest/download/jq-windows-amd64.exe"
+      export PATH="${TMPDIR:-/tmp/}:${PATH}"
+      ;;
+    *)
+      echo "Error: jq is required but not installed." >&2
+      exit 1
+      ;;
+  esac
+fi
+
 ip="$(curl --fail https://checkip.amazonaws.com/)"
 echo "Registering IP: $ip"
 

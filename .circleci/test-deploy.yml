@@ -15,11 +15,23 @@ jobs:
     steps:
       - checkout
 
+  windows-smoke-test:
+    machine:
+      image: windows-server-2022-gui:current
+      resource_class: windows.medium
+      shell: bash.exe
+    steps:
+      - checkout
+      - continuation/setup
+      - continuation/cleanup
+
 workflows:
   test-deploy:
     jobs:
       # Make sure to include "filters: *filters" in every test job you want to run as part of your deployment.
       - command-tests:
+          filters: *filters
+      - windows-smoke-test:
           filters: *filters
       - orb-tools/pack:
           filters: *filters

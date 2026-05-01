@@ -219,3 +219,93 @@ CURLEOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"did not bind to port 4140"* ]]
 }
+
+# Windows-specific tests
+# These mock uname to return MSYS_NT-10.0-20348, matching the actual CircleCI Windows Server 2022 executor.
+# tunnel_details.json is pre-written directly (launch-proxy.sh reads it; register.sh writes it).
+
+@test "launch-proxy uses 'windows' in download URL" {
+  local curl_calls="$TEST_TMP/curl_calls"
+  write_windows_uname_mock
+  mock_cmd cygpath 0 "C:/tmp/tunnel-proxy.exe"
+  # SSH-only tunnel: no HTTPS proxy daemon started, so no liveness check needed
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+
+  cat > "$MOCK_BIN/curl" <<CURLEOF
+#!/bin/bash
+echo "\$@" >> ${curl_calls}
+got_o=false
+for arg in "\$@"; do
+  if \$got_o; then
+    printf '#!/bin/bash\nexit 0\n' > "\$arg"
+    chmod +x "\$arg" 2>/dev/null || true
+    exit 0
+  fi
+  [[ "\$arg" == "-o" ]] && got_o=true
+done
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  grep -q "tunnel-proxy_windows_amd64" "$curl_calls"
+}
+
+@test "launch-proxy appends .exe to binary name on Windows" {
+  local curl_calls="$TEST_TMP/curl_calls"
+  write_windows_uname_mock
+  mock_cmd cygpath 0 "C:/tmp/tunnel-proxy.exe"
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+
+  cat > "$MOCK_BIN/curl" <<CURLEOF
+#!/bin/bash
+echo "\$@" >> ${curl_calls}
+got_o=false
+for arg in "\$@"; do
+  if \$got_o; then
+    printf '#!/bin/bash\nexit 0\n' > "\$arg"
+    chmod +x "\$arg" 2>/dev/null || true
+    exit 0
+  fi
+  [[ "\$arg" == "-o" ]] && got_o=true
+done
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  grep -q "tunnel-proxy_windows_amd64.exe" "$curl_calls"
+}
+
+@test "launch-proxy skips nohup on Windows and still starts daemon" {
+  write_windows_uname_mock
+  mock_cmd cygpath 0 "C:/tmp/tunnel-proxy.exe"
+  echo "$MOCK_SINGLE_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  write_curl_mock "$MOCK_SINGLE_TUNNEL"
+
+  local nohup_called="$TEST_TMP/nohup_called"
+  cat > "$MOCK_BIN/nohup" <<NOHUPEOF
+#!/bin/bash
+touch "${nohup_called}"
+exec "\$@"
+NOHUPEOF
+  chmod +x "$MOCK_BIN/nohup"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  [ ! -f "$nohup_called" ]
+  grep -q 'HTTPS_PROXY' "$BASH_ENV"
+}
+
+@test "launch-proxy uses cygpath-converted path in SSH ProxyCommand on Windows" {
+  write_windows_uname_mock
+  mock_cmd cygpath 0 "C:/tmp/tunnel-proxy.exe"
+  echo "$MOCK_SINGLE_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  write_curl_mock "$MOCK_SINGLE_TUNNEL"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  grep -qF "C:/tmp/tunnel-proxy.exe" "$HOME/.ssh/config"
+}

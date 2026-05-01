@@ -2,7 +2,9 @@
 description: >
   Setup CircleCI tunnel for site to site connectivity. Configures HTTPS_PROXY
   and SSH ProxyCommand so subsequent steps (including the built-in checkout)
-  can reach private infrastructure through the tunnel.
+  can reach private infrastructure through the tunnel. Supports Linux, macOS,
+  and Windows executors. When using a Windows machine executor, set
+  shell: bash.exe on the executor so the orb scripts run correctly.
 
 parameters:
   tunnel-proxy-version:

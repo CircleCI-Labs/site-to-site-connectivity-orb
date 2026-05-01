@@ -39,7 +39,7 @@ CURLEOF
 
 # write_curl_mock <tunnel_json>
 # Creates a curl mock backed by a tunnel-proxy stub that binds to port 4140
-# on 'serve' (satisfying both the kill -0 liveness check and nc -z port check).
+# on 'serve' (satisfying both the kill -0 liveness check and /dev/tcp port check).
 write_curl_mock() {
   local tunnel_json="$1"
   local stub_file="$MOCK_BIN/tunnel-proxy-stub"
@@ -73,6 +73,20 @@ echo '$out'
 exit $code
 EOF
   chmod +x "$MOCK_BIN/$name"
+}
+
+# Write a uname mock that simulates Windows Git Bash environment.
+# uname -s returns MSYS_NT-10.0-20348 (actual value from CircleCI Windows Server 2022 executor).
+write_windows_uname_mock() {
+  cat > "$MOCK_BIN/uname" <<'EOF'
+#!/bin/bash
+case "$1" in
+  -s) echo "MSYS_NT-10.0-20348" ;;
+  -m) echo "x86_64" ;;
+  *)  echo "MSYS_NT-10.0-20348" ;;
+esac
+EOF
+  chmod +x "$MOCK_BIN/uname"
 }
 
 # Single-tunnel response: one internal host, both vcs and vcs-ssh

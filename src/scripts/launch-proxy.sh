@@ -7,22 +7,29 @@ tunnel_details="$(cat "${TMPDIR:-/tmp}/tunnel_details.json")"
 # Detect OS and architecture for binary download
 os="$(uname -s | tr '[:upper:]' '[:lower:]')"
 arch_raw="$(uname -m)"
+case "$os" in
+  # Git Bash on CircleCI Windows reports MSYS_NT-10.0-XXXXX (lowercased: msys_nt-*)
+  msys_nt* | msys* | mingw* | cygwin*) os="windows" ;;
+esac
 case "$arch_raw" in
-x86_64) arch="amd64" ;;
-aarch64 | arm64) arch="arm64" ;;
-*)
-  echo "Error: unsupported architecture: $arch_raw"
-  exit 1
-  ;;
+  x86_64) arch="amd64" ;;
+  aarch64 | arm64) arch="arm64" ;;
+  *)
+    echo "Error: unsupported architecture: $arch_raw"
+    exit 1
+    ;;
 esac
 
-proxy_bin="${TMPDIR:-/tmp}/tunnel-proxy"
+ext=""
+[ "$os" = "windows" ] && ext=".exe"
+
+proxy_bin="${TMPDIR:-/tmp}/tunnel-proxy${ext}"
 proxy_version="${PARAM_TUNNEL_PROXY_VERSION:-latest}"
 
 if [ "$proxy_version" = "latest" ]; then
-  download_url="https://github.com/CircleCI-Labs/site-to-site-tunnel-proxy/releases/latest/download/tunnel-proxy_${os}_${arch}"
+  download_url="https://github.com/CircleCI-Labs/site-to-site-tunnel-proxy/releases/latest/download/tunnel-proxy_${os}_${arch}${ext}"
 else
-  download_url="https://github.com/CircleCI-Labs/site-to-site-tunnel-proxy/releases/download/${proxy_version}/tunnel-proxy_${os}_${arch}"
+  download_url="https://github.com/CircleCI-Labs/site-to-site-tunnel-proxy/releases/download/${proxy_version}/tunnel-proxy_${os}_${arch}${ext}"
 fi
 
 echo "Downloading tunnel-proxy from ${download_url}"
@@ -41,7 +48,13 @@ done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "h
 
 if [ "${#serve_args[@]}" -gt 0 ]; then
   echo "Starting tunnel-proxy serve"
-  nohup "${proxy_bin}" serve "${serve_args[@]}" >/tmp/tunnel-proxy.log 2>&1 &
+  if [ "$os" = "windows" ]; then
+    # Windows MSYS nohup exists but behaves differently; & disown is sufficient
+    # since Windows does not deliver SIGHUP when the parent shell exits
+    "${proxy_bin}" serve "${serve_args[@]}" >"/tmp/tunnel-proxy.log" 2>&1 &
+  else
+    nohup "${proxy_bin}" serve "${serve_args[@]}" >/tmp/tunnel-proxy.log 2>&1 &
+  fi
   proxy_pid=$!
   # disown is deferred until after the readiness check so bash can reap the
   # child if it crashes, making kill -0 a reliable liveness signal
@@ -77,12 +90,18 @@ fi
 
 # Write SSH config ProxyCommand entries for each vcs-ssh mapping
 [ ! -d ~/.ssh ] && mkdir -p ~/.ssh
+# OpenSSH on Windows requires a native Windows path in ProxyCommand
+if [ "$os" = "windows" ]; then
+  ssh_proxy_bin="$(cygpath -w "${proxy_bin}")"
+else
+  ssh_proxy_bin="${proxy_bin}"
+fi
 while IFS=$'\t' read -r host ssh_domain; do
   echo "  SSH tunnel: ${host}:22 -> ${ssh_domain}:443"
   cat >>~/.ssh/config <<EOF
 
 Host ${host}
-  ProxyCommand ${proxy_bin} connect --tunnel ${host}:22=tls://${ssh_domain}:443 %h:%p
+  ProxyCommand ${ssh_proxy_bin} connect --tunnel ${host}:22=tls://${ssh_domain}:443 %h:%p
   StrictHostKeyChecking accept-new
 EOF
 done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "ssh") | [.internal_host, .tunnel_domain] | @tsv')

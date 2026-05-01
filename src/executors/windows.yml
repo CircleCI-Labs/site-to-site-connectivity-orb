@@ -1,0 +1,25 @@
+---
+description: >
+  A Windows Server 2022 machine executor pre-configured for use with the
+  site-to-site-connectivity orb. Uses bash.exe as the default shell so all
+  orb scripts run without additional configuration.
+
+machine:
+  image: windows-server-2022-gui:<<parameters.version>>
+  resource_class: windows.<<parameters.size>>
+  shell: bash.exe
+
+parameters:
+  size:
+    description: >
+      Windows resource class. Choose based on the workload running alongside
+      the tunnel. medium (4 vCPU / 15 GB) is sufficient for most cases.
+    type: enum
+    enum: [medium, large, xlarge, 2xlarge]
+    default: medium
+  version:
+    description: >
+      Windows image version. Use current for the latest stable release,
+      previous for the prior release, or edge for the latest unstable build.
+    type: string
+    default: current

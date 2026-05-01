@@ -3,7 +3,16 @@
 set -eu -o pipefail
 
 tunnel_details="$(cat "${TMPDIR:-/tmp}/tunnel_details.json")"
-proxy_bin="${TMPDIR:-/tmp}/tunnel-proxy"
+
+# Detect OS for platform-specific command workarounds
+os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$os" in
+  msys_nt* | msys* | mingw* | cygwin*) os="windows" ;;
+esac
+
+ext=""
+[ "$os" = "windows" ] && ext=".exe"
+proxy_bin="${TMPDIR:-/tmp}/tunnel-proxy${ext}"
 
 echo "Verifying tunnel connectivity"
 while IFS=$'\t' read -r service_type internal_host tunnel_domain; do
@@ -15,9 +24,16 @@ while IFS=$'\t' read -r service_type internal_host tunnel_domain; do
     if [[ "$service_type" == "ssh" ]]; then
       # Read first 4 bytes — SSH server sends banner immediately on connect.
       # sleep holds stdin open so connect doesn't close the remote before the banner arrives.
-      response=$(sleep 1 | timeout 5 "${proxy_bin}" connect \
-        --tunnel "${internal_host}:22=tls://${tunnel_domain}:443" \
-        "${internal_host}:22" 2>/dev/null | head -c 4 || true)
+      # timeout is not available in Git Bash on Windows (Windows timeout.exe has different syntax)
+      if [ "$os" = "windows" ]; then
+        response=$(sleep 1 | "${proxy_bin}" connect \
+          --tunnel "${internal_host}:22=tls://${tunnel_domain}:443" \
+          "${internal_host}:22" 2>/dev/null | head -c 4 || true)
+      else
+        response=$(sleep 1 | timeout 5 "${proxy_bin}" connect \
+          --tunnel "${internal_host}:22=tls://${tunnel_domain}:443" \
+          "${internal_host}:22" 2>/dev/null | head -c 4 || true)
+      fi
       [[ "$response" == "SSH-" ]] && verified=1
     else
       # Any HTTP response (even an error) confirms the tunnel is routing traffic
