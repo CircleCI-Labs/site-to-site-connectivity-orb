@@ -3,8 +3,9 @@ description: >
   Setup CircleCI tunnel for site to site connectivity. Configures HTTPS_PROXY
   and SSH ProxyCommand so subsequent steps (including the built-in checkout)
   can reach private infrastructure through the tunnel. Supports Linux, macOS,
-  and Windows executors. When using a Windows machine executor, set
-  shell: bash.exe on the executor so the orb scripts run correctly.
+  Windows (bash.exe or PowerShell default), Docker, and GPU executors.
+  All run steps use shell: bash explicitly, so no executor-level shell
+  configuration is required.
 
 parameters:
   tunnel-proxy-version:
@@ -54,6 +55,7 @@ parameters:
 steps:
   - run:
       name: Authorize tunnel and fetch configuration
+      shell: bash
       environment:
         PARAM_REG_RETRY_ATTEMPTS: << parameters.registration-retry-attempts >>
         PARAM_REG_RETRY_DELAY: << parameters.registration-retry-delay >>
@@ -61,6 +63,7 @@ steps:
       command: <<include(scripts/register.sh)>>
   - run:
       name: Resolve tunnel-proxy version
+      shell: bash
       environment:
         PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
       command: <<include(scripts/resolve-version.sh)>>
@@ -72,6 +75,7 @@ steps:
               - << parameters.cache-version >>-tunnel-proxy-{{ checksum "/tmp/.tunnel-proxy-version" }}
   - run:
       name: Launch tunnel proxy
+      shell: bash
       environment:
         PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
         PARAM_NO_PROXY: << parameters.no-proxy >>
@@ -86,6 +90,7 @@ steps:
               - /tmp/tunnel-proxy-bin
   - run:
       name: tunnel-proxy logs
+      shell: bash
       background: true
       command: |
         touch "${TMPDIR:-/tmp}/tunnel-proxy.log"
@@ -95,6 +100,7 @@ steps:
       steps:
         - run:
             name: Verify tunnel connectivity
+            shell: bash
             environment:
               PARAM_VERIFY_ATTEMPTS: << parameters.verify-tunnel-attempts >>
               DEBUG: << parameters.debug >>

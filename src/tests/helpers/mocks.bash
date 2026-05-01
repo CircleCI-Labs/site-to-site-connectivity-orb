@@ -94,6 +94,33 @@ EOF
   chmod +x "$MOCK_BIN/uname"
 }
 
+# write_powershell_mock <profile_path>
+# Mocks powershell.exe (returns profile_path for AllUsersCurrentHost queries)
+# and cygpath (handles -w unix→windows and plain windows→unix conversions).
+write_powershell_mock() {
+  local ps_profile="$1"
+  cat > "$MOCK_BIN/powershell.exe" <<EOF
+#!/bin/bash
+if [[ "\$*" == *"AllUsersCurrentHost"* ]]; then echo "${ps_profile}"; exit 0; fi
+exit 0
+EOF
+  chmod +x "$MOCK_BIN/powershell.exe"
+
+  cat > "$MOCK_BIN/cygpath" <<EOF
+#!/bin/bash
+if [[ "\$1" == "-w" ]]; then
+  case "\${2:-}" in
+    */tunnel-proxy-bin/tunnel-proxy*) echo "C:/tmp/tunnel-proxy-bin/\$(basename "\${2}")" ;;
+    */tunnel-proxy-bin)               echo 'C:\\tmp\\tunnel-proxy-bin' ;;
+    *)                                printf 'C:\\\\%s' "\$(echo "\${2}" | tr '/' '\\\\')" ;;
+  esac
+else
+  echo "${ps_profile}"
+fi
+EOF
+  chmod +x "$MOCK_BIN/cygpath"
+}
+
 # Single-tunnel response: one internal host, both vcs and vcs-ssh
 MOCK_SINGLE_TUNNEL='{"tunnels":[{"service_type":"https","tunnel_domain":"vcs.tun.example.com","internal_host":"ghe.corp.test"},{"service_type":"ssh","tunnel_domain":"vcs-ssh.tun.example.com","internal_host":"ghe.corp.test"}]}'
 

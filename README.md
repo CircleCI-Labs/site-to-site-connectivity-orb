@@ -21,7 +21,21 @@ This orb:
 3. Configures `HTTPS_PROXY` and SSH `ProxyCommand` so subsequent steps reach private infrastructure transparently — including the built-in `checkout` step
 4. Deregisters the executor IP on cleanup
 
-**Supported executors:** Linux (Docker and machine), macOS, and Windows (Git Bash / `bash.exe`).
+**Supported executors:**
+
+| Executor | Image / Config | Architecture | Notes |
+|---|---|---|---|
+| Docker | `cimg/base:current` (or any image) | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
+| Linux machine | `ubuntu-2204:current` | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
+| macOS | `xcode: 16.x`, `macos.m1.medium.gen1` | arm64 (M1/M2) | |
+| Windows (bash.exe) | `windows-server-2022-gui:current` | amd64 | `shell: bash.exe` optional at executor level |
+| Windows (PowerShell) | `windows-server-2022-gui:current` | amd64 | Works — orb forces `shell: bash` per-step |
+| Windows ARM | `windows-server-2022-gui:current` | arm64 | Available on CircleCI, currently undocumented |
+| GPU (Linux) | `ubuntu-2204-cuda12:current` | amd64 | Treated as a standard Linux machine |
+
+All orb `run` steps explicitly use `shell: bash`, so the orb works regardless of the executor's default shell. On Windows, bash resolves to Git Bash (pre-installed on all CircleCI Windows images). You do **not** need to set `shell: bash.exe` at the executor level, though doing so is harmless.
+
+> **PowerShell steps work automatically.** On Windows, the orb appends `$env:HTTPS_PROXY`, `$env:NO_PROXY`, and `$env:PATH` to `$PROFILE.AllUsersCurrentHost`, which PowerShell sources before every step. `cleanup` removes those entries. No manual configuration required.
 
 ## Commands
 
@@ -98,7 +112,7 @@ workflows:
 
 ### Windows machine executor
 
-On Windows, set `shell: bash.exe` on the executor so the orb scripts run in Git Bash.
+The orb works with the default PowerShell executor — no `shell: bash.exe` required at the executor level. You may still set it if all your own steps also need bash.
 
 ```yaml
 version: 2.1
@@ -111,7 +125,7 @@ jobs:
     machine:
       image: windows-server-2022-gui:current
       resource_class: windows.medium
-      shell: bash.exe
+      # shell: bash.exe is optional — the orb works with the default PowerShell shell
     steps:
       - site-to-site-connectivity/setup
       - checkout
@@ -126,6 +140,24 @@ workflows:
     jobs:
       - build:
           context: site-to-site-tunnel
+```
+
+### GPU (Linux) executor
+
+No special configuration required — the GPU executor is treated as a standard Linux machine:
+
+```yaml
+jobs:
+  build:
+    machine:
+      image: ubuntu-2204-cuda12:current
+    resource_class: gpu.nvidia.small.gen2
+    steps:
+      - site-to-site-connectivity/setup
+      - checkout
+      - run: python train.py
+      - site-to-site-connectivity/cleanup:
+          when: always
 ```
 
 ### Pin a specific version and disable caching

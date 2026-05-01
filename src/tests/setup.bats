@@ -366,3 +366,63 @@ NOHUPEOF
   [ "$status" -eq 0 ]
   grep -qF "C:/tmp/tunnel-proxy-bin/tunnel-proxy.exe" "$HOME/.ssh/config"
 }
+
+@test "launch-proxy writes tunnel env to PowerShell profile on Windows" {
+  local ps_profile="$TEST_TMP/ps_profile.ps1"
+  write_windows_uname_mock
+  write_powershell_mock "$ps_profile"
+  echo "$MOCK_SINGLE_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  write_curl_mock "$MOCK_SINGLE_TUNNEL"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  [ -f "$ps_profile" ]
+  grep -q 'HTTPS_PROXY' "$ps_profile"
+  grep -q 'NO_PROXY' "$ps_profile"
+  grep -q 'tunnel-proxy-bin' "$ps_profile"
+  grep -q 'BEGIN site-to-site-orb' "$ps_profile"
+}
+
+@test "launch-proxy writes PATH but not HTTPS_PROXY to PowerShell profile on SSH-only tunnel" {
+  local ps_profile="$TEST_TMP/ps_profile.ps1"
+  write_windows_uname_mock
+  write_powershell_mock "$ps_profile"
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  write_curl_mock "$MOCK_SSH_ONLY_TUNNEL"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  [ -f "$ps_profile" ]
+  grep -q 'tunnel-proxy-bin' "$ps_profile"
+  ! grep -q 'HTTPS_PROXY' "$ps_profile"
+}
+
+@test "cleanup removes PowerShell profile entries on Windows" {
+  local ps_profile="$TEST_TMP/ps_profile.ps1"
+  cat > "$ps_profile" <<'PS1EOF'
+# some existing content
+# BEGIN site-to-site-orb
+$env:HTTPS_PROXY = 'http://127.0.0.1:4140'
+# END site-to-site-orb
+PS1EOF
+
+  write_windows_uname_mock
+  write_powershell_mock "$ps_profile"
+  mock_cmd taskkill 0 ""
+
+  export CIRCLE_OIDC_TOKEN="test-token"
+  export EXECUTOR_IP="1.2.3.4"
+
+  cat > "$MOCK_BIN/curl" <<'CURLEOF'
+#!/bin/bash
+if [[ "$*" == *"ip-policy/remove"* ]]; then echo "200"; fi
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  run bash src/scripts/cleanup.sh
+  [ "$status" -eq 0 ]
+  grep -q 'some existing content' "$ps_profile"
+  ! grep -q 'HTTPS_PROXY' "$ps_profile"
+  ! grep -q 'BEGIN site-to-site-orb' "$ps_profile"
+}

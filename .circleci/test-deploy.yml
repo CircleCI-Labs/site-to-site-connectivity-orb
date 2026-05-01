@@ -7,7 +7,16 @@ filters: &filters
   tags:
     only: /.*/
 
+# Shared steps for every smoke test: setup, optional verify, cleanup.
+# All smoke tests require context: site-to-site-tunnel.
+smoke_steps: &smoke_steps
+  steps:
+    - checkout
+    - continuation/setup
+    - continuation/cleanup
+
 jobs:
+  # ── Unit tests (no tunnel credentials needed) ──────────────────────────────
   command-tests:
     docker:
       - image: cimg/base:current
@@ -20,69 +29,141 @@ jobs:
           name: Run unit tests
           command: bats src/tests/setup.bats
 
-  linux-smoke-test:
+  # ── Docker executor ────────────────────────────────────────────────────────
+  docker-amd64-smoke-test:
+    docker:
+      - image: cimg/base:current
+    resource_class: medium
+    <<: *smoke_steps
+
+  docker-arm64-smoke-test:
+    docker:
+      - image: cimg/base:current
+    resource_class: arm.medium
+    <<: *smoke_steps
+
+  # ── Linux machine executor ─────────────────────────────────────────────────
+  linux-machine-amd64-smoke-test:
     machine:
       image: ubuntu-2204:current
-    steps:
-      - checkout
-      - continuation/setup
-      - run:
-          name: Verify HTTPS_PROXY is set
-          command: |
-            source "$BASH_ENV"
-            [ -n "${HTTPS_PROXY:-}" ] || (echo "HTTPS_PROXY not set" && exit 1)
-      - continuation/cleanup
+    resource_class: medium
+    <<: *smoke_steps
 
+  linux-machine-arm64-smoke-test:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.medium
+    <<: *smoke_steps
+
+  # ── macOS executor ─────────────────────────────────────────────────────────
   macos-smoke-test:
     macos:
       xcode: "16.1.0"
     resource_class: macos.m1.medium.gen1
-    steps:
-      - checkout
-      - continuation/setup
-      - run:
-          name: Verify HTTPS_PROXY is set
-          command: |
-            source "$BASH_ENV"
-            [ -n "${HTTPS_PROXY:-}" ] || (echo "HTTPS_PROXY not set" && exit 1)
-      - continuation/cleanup
+    <<: *smoke_steps
 
+  # ── Windows executor ──────────────────────────────────────────────────────
+  # bash.exe: explicit — for users who set shell: bash.exe at executor level
   windows-smoke-test:
     machine:
       image: windows-server-2022-gui:current
       resource_class: windows.medium
       shell: bash.exe
-    steps:
-      - checkout
-      - continuation/setup
-      - continuation/cleanup
+    <<: *smoke_steps
+
+  # powershell: orb uses shell:bash on each step so no executor-level config needed
+  windows-powershell-smoke-test:
+    machine:
+      image: windows-server-2022-gui:current
+      resource_class: windows.medium
+    <<: *smoke_steps
+
+  # windows-arm-smoke-test:
+  #   Windows ARM is available on CircleCI but currently undocumented.
+  #   Uncomment when the resource class is officially published.
+  #   machine:
+  #     image: windows-server-2022-gui:current
+  #     resource_class: windows.arm.medium
+  #     shell: bash.exe
+  #   <<: *smoke_steps
+
+  # ── GPU executor (Linux x86_64 + NVIDIA T4) ────────────────────────────────
+  gpu-linux-smoke-test:
+    machine:
+      image: ubuntu-2204-cuda12:current
+    resource_class: gpu.nvidia.small.gen2
+    <<: *smoke_steps
 
 workflows:
   test-deploy:
     jobs:
+      # ── Static validation (always) ──────────────────────────────────────────
       - command-tests:
-          filters: *filters
-      - linux-smoke-test:
-          context: site-to-site-tunnel
-          filters: *filters
-      - macos-smoke-test:
-          context: site-to-site-tunnel
-          filters: *filters
-      - windows-smoke-test:
-          context: site-to-site-tunnel
           filters: *filters
       - orb-tools/pack:
           filters: *filters
+
+      # ── Publish dev orb so smoke tests use the current source ───────────────
       - orb-tools/publish:
+          name: publish-dev
+          orb-name: cci-labs/site-to-site-connectivity
+          vcs-type: << pipeline.project.type >>
+          pub-type: dev
+          requires:
+            - orb-tools/pack
+          context: orb-publishing
+          filters: *filters
+
+      # ── Smoke tests — one per executor family ──────────────────────────────
+      - docker-amd64-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - docker-arm64-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - linux-machine-amd64-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - linux-machine-arm64-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - macos-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - windows-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - windows-powershell-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - gpu-linux-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+
+      # ── Production publish — only on semver tags, all smoke tests must pass ─
+      - orb-tools/publish:
+          name: publish-production
           orb-name: cci-labs/site-to-site-connectivity
           vcs-type: << pipeline.project.type >>
           pub-type: production
           requires:
-            - orb-tools/pack
             - command-tests
-            - linux-smoke-test
+            - docker-amd64-smoke-test
+            - docker-arm64-smoke-test
+            - linux-machine-amd64-smoke-test
+            - linux-machine-arm64-smoke-test
             - macos-smoke-test
             - windows-smoke-test
+            - windows-powershell-smoke-test
+            - gpu-linux-smoke-test
           context: orb-publishing
           filters:
             branches:

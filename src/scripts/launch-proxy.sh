@@ -45,6 +45,7 @@ echo "export PATH=\"/tmp/tunnel-proxy-bin:\$PATH\"" >>"$BASH_ENV"
 
 # Start HTTP CONNECT proxy daemon for HTTPS traffic — one --tunnel per vcs mapping
 serve_args=()
+no_proxy=""
 while IFS=$'\t' read -r host domain; do
   serve_args+=("--tunnel" "${host}=tls://${domain}:443")
   echo "  HTTPS tunnel: ${host} -> tls://${domain}:443"
@@ -70,7 +71,7 @@ if [ "${#serve_args[@]}" -gt 0 ]; then
       cat "${TMPDIR:-/tmp}/tunnel-proxy.log" >&2
       exit 1
     fi
-    if (echo >/dev/tcp/127.0.0.1/4140) 2>/dev/null; then
+    if nc -z 127.0.0.1 4140 2>/dev/null || (echo >/dev/tcp/127.0.0.1/4140) 2>/dev/null; then
       proxy_ready=1
       break
     fi
@@ -109,3 +110,28 @@ Host ${host}
   StrictHostKeyChecking accept-new
 EOF
 done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "ssh") | [.internal_host, .tunnel_domain] | @tsv')
+
+# On Windows, also write env vars into the PowerShell profile so they are
+# available in every subsequent PowerShell step without any user configuration.
+# $PROFILE.AllUsersCurrentHost is sourced by powershell.exe at startup;
+# CircleCI does not pass -NoProfile to job steps.
+if [ "$os" = "windows" ]; then
+  # shellcheck disable=SC2016
+  _ps_profile_win=$(powershell.exe -NoProfile -NonInteractive \
+    -Command '$PROFILE.AllUsersCurrentHost' 2>/dev/null | tr -d '\r\n' || true)
+  if [ -n "$_ps_profile_win" ]; then
+    _ps_profile=$(cygpath "$_ps_profile_win" 2>/dev/null || echo "$_ps_profile_win")
+    mkdir -p "$(dirname "$_ps_profile")" 2>/dev/null || true
+    _win_bin=$(cygpath -w /tmp/tunnel-proxy-bin 2>/dev/null || printf '%s' 'C:\tmp\tunnel-proxy-bin')
+    {
+      printf '\n# BEGIN site-to-site-orb\n'
+      printf "\$env:PATH = '%s;' + \$env:PATH\n" "$_win_bin"
+      if [ -n "$no_proxy" ]; then
+        printf "\$env:HTTPS_PROXY = 'http://127.0.0.1:4140'\n"
+        printf "\$env:NO_PROXY = '%s'\n" "$no_proxy"
+      fi
+      printf '# END site-to-site-orb\n'
+    } >> "$_ps_profile"
+    echo "PowerShell profile updated: $_ps_profile"
+  fi
+fi

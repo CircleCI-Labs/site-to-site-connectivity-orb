@@ -19,9 +19,35 @@ fi
 
 echo "Cleaning up CircleCI tunnel for IP: ${EXECUTOR_IP}"
 
+os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$os" in
+  msys_nt* | msys* | mingw* | cygwin*) os="windows" ;;
+esac
+
 # Stop the tunnel-proxy daemon before deregistering so it releases the port
 # and closes connections cleanly
-pkill -f "tunnel-proxy serve" 2>/dev/null || true
+if [ "$os" = "windows" ]; then
+  taskkill /F /IM tunnel-proxy.exe 2>/dev/null || true
+else
+  pkill -f "tunnel-proxy serve" 2>/dev/null || true
+fi
+
+# On Windows, remove the env var block written to the PowerShell profile by
+# launch-proxy.sh so subsequent jobs on the same machine start clean.
+if [ "$os" = "windows" ]; then
+  # shellcheck disable=SC2016
+  _ps_profile_win=$(powershell.exe -NoProfile -NonInteractive \
+    -Command '$PROFILE.AllUsersCurrentHost' 2>/dev/null | tr -d '\r\n' || true)
+  if [ -n "$_ps_profile_win" ]; then
+    _ps_profile=$(cygpath "$_ps_profile_win" 2>/dev/null || echo "$_ps_profile_win")
+    if [ -f "$_ps_profile" ]; then
+      if sed '/# BEGIN site-to-site-orb/,/# END site-to-site-orb/d' \
+          "$_ps_profile" > "${_ps_profile}.tmp"; then
+        mv "${_ps_profile}.tmp" "$_ps_profile" || true
+      fi
+    fi
+  fi
+fi
 
 max_attempts=3
 retry_delay=10

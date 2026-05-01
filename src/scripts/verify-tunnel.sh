@@ -25,7 +25,7 @@ while IFS=$'\t' read -r service_type internal_host tunnel_domain; do
       # Read first 4 bytes — SSH server sends banner immediately on connect.
       # sleep holds stdin open so connect doesn't close the remote before the banner arrives.
       # timeout is not available in Git Bash on Windows (Windows timeout.exe has different syntax)
-      if [ "$os" = "windows" ]; then
+      if [ "$os" = "windows" ] || ! command -v timeout &>/dev/null; then
         response=$(sleep 1 | "${proxy_bin}" connect \
           --tunnel "${internal_host}:22=tls://${tunnel_domain}:443" \
           "${internal_host}:22" 2>/dev/null | head -c 4 || true)

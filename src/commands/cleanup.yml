@@ -10,6 +10,7 @@ parameters:
 
 steps:
   - run:
+      shell: bash
       environment:
         DEBUG: << parameters.debug >>
       name: Cleanup tunnel
