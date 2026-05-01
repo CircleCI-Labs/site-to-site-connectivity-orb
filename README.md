@@ -55,7 +55,8 @@ Registers the executor IP, fetches tunnel configuration, downloads `tunnel-proxy
 | `no-proxy` | string | `""` | Additional comma-separated hosts to exclude from the HTTPS proxy |
 | `verify-tunnel` | boolean | `true` | Verify each tunnel is reachable before the step completes |
 | `verify-tunnel-attempts` | integer | `5` | Number of connection attempts per tunnel during verification |
-| `debug` | boolean | `false` | Enable verbose debug logging |
+| `debug` | boolean | `false` | Enable verbose debug logging. When `true`, a log-dump step is appended that prints `tunnel-proxy.log` whenever a previous step fails — making tunnel startup failures immediately visible without manual log inspection. |
+| `tunnel-proxy-sha256` | string | `""` | Expected SHA256 hex digest of the `tunnel-proxy` binary. When non-empty, the binary is verified after download or cache restore. Only meaningful when `tunnel-proxy-version` is also pinned. Leave empty to skip verification. |
 
 **Exports to subsequent steps via `$BASH_ENV`:**
 
@@ -167,6 +168,20 @@ jobs:
     tunnel-proxy-version: v0.0.3
     cache: false
 ```
+
+### Pin a version with SHA256 verification
+
+For maximum supply-chain security, pin both the version and the expected binary digest. If the binary is tampered with (or the wrong file is served), the job fails before the proxy ever starts.
+
+Retrieve the digest by running `sha256sum tunnel-proxy_linux_amd64` (or `shasum -a 256` on macOS) after a trusted download, then record it in your pipeline configuration:
+
+```yaml
+- site-to-site-connectivity/setup:
+    tunnel-proxy-version: v0.0.3
+    tunnel-proxy-sha256: <sha256-hex-of-tunnel-proxy_linux_amd64>
+```
+
+Verification runs whether the binary was just downloaded or restored from cache.
 
 ### Bust the cache after a forced upgrade
 

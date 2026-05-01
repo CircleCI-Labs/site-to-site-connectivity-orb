@@ -40,6 +40,27 @@ else
   echo "Using cached tunnel-proxy at ${proxy_bin}"
 fi
 
+if [ -n "${PARAM_TUNNEL_PROXY_SHA256:-}" ]; then
+  echo "Verifying tunnel-proxy SHA256..."
+  # Use sha256sum (GNU/Linux/Windows) or shasum (macOS) — avoid --check because
+  # BSD sha256sum (macOS) does not support that flag.
+  _actual_sha=""
+  if command -v sha256sum &>/dev/null; then
+    _actual_sha=$(sha256sum "${proxy_bin}" | awk '{print $1}')
+  elif command -v shasum &>/dev/null; then
+    _actual_sha=$(shasum -a 256 "${proxy_bin}" | awk '{print $1}')
+  else
+    echo "Warning: no SHA256 tool available; skipping verification" >&2
+  fi
+  if [ -n "$_actual_sha" ] && [ "$_actual_sha" != "${PARAM_TUNNEL_PROXY_SHA256}" ]; then
+    echo "Error: SHA256 mismatch for ${proxy_bin}"
+    echo "  Expected: ${PARAM_TUNNEL_PROXY_SHA256}"
+    echo "  Got:      ${_actual_sha}"
+    exit 1
+  fi
+  echo "SHA256 verified"
+fi
+
 # Add tunnel-proxy to PATH for subsequent steps (including SSH ProxyCommand lookups)
 echo "export PATH=\"/tmp/tunnel-proxy-bin:\$PATH\"" >>"$BASH_ENV"
 
@@ -123,12 +144,15 @@ if [ "$os" = "windows" ]; then
     _ps_profile=$(cygpath "$_ps_profile_win" 2>/dev/null || echo "$_ps_profile_win")
     mkdir -p "$(dirname "$_ps_profile")" 2>/dev/null || true
     _win_bin=$(cygpath -w /tmp/tunnel-proxy-bin 2>/dev/null || printf '%s' 'C:\tmp\tunnel-proxy-bin')
+    # Escape single quotes for PowerShell string literals (PS doubles them: '' → ')
+    _win_bin_ps="${_win_bin//\'/\'\'}"
+    _no_proxy_ps="${no_proxy//\'/\'\'}"
     {
       printf '\n# BEGIN site-to-site-orb\n'
-      printf "\$env:PATH = '%s;' + \$env:PATH\n" "$_win_bin"
+      printf "\$env:PATH = '%s;' + \$env:PATH\n" "$_win_bin_ps"
       if [ -n "$no_proxy" ]; then
         printf "\$env:HTTPS_PROXY = 'http://127.0.0.1:4140'\n"
-        printf "\$env:NO_PROXY = '%s'\n" "$no_proxy"
+        printf "\$env:NO_PROXY = '%s'\n" "$_no_proxy_ps"
       fi
       printf '# END site-to-site-orb\n'
     } >> "$_ps_profile"

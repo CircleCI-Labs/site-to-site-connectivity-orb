@@ -36,7 +36,9 @@ while IFS=$'\t' read -r service_type internal_host tunnel_domain; do
       fi
       [[ "$response" == "SSH-" ]] && verified=1
     else
-      # Any HTTP response (even an error) confirms the tunnel is routing traffic
+      # -k: internal hosts commonly use self-signed certs; any HTTP response
+      # (even an error) confirms the tunnel is routing traffic, so TLS
+      # validity is not meaningful here.
       http_code=$(curl -k -s -o /dev/null -w "%{http_code}" \
         --connect-timeout 5 --max-time 5 \
         --proxy http://127.0.0.1:4140 \

@@ -78,14 +78,12 @@ jobs:
       resource_class: windows.medium
     <<: *smoke_steps
 
-  # windows-arm-smoke-test:
-  #   Windows ARM is available on CircleCI but currently undocumented.
-  #   Uncomment when the resource class is officially published.
-  #   machine:
-  #     image: windows-server-2022-gui:current
-  #     resource_class: windows.arm.medium
-  #     shell: bash.exe
-  #   <<: *smoke_steps
+  windows-arm-smoke-test:
+    machine:
+      image: windows-11-arm:current
+      resource_class: windows.arm.medium
+      shell: bash.exe
+    <<: *smoke_steps
 
   # ── GPU executor (Linux x86_64 + NVIDIA T4) ────────────────────────────────
   gpu-linux-smoke-test:
@@ -143,6 +141,10 @@ workflows:
           context: site-to-site-tunnel
           requires: [publish-dev]
           filters: *filters
+      - windows-arm-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
       - gpu-linux-smoke-test:
           context: site-to-site-tunnel
           requires: [publish-dev]
@@ -163,6 +165,7 @@ workflows:
             - macos-smoke-test
             - windows-smoke-test
             - windows-powershell-smoke-test
+            - windows-arm-smoke-test
             - gpu-linux-smoke-test
           context: orb-publishing
           filters:

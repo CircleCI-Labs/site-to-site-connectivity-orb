@@ -51,6 +51,14 @@ parameters:
     type: boolean
     description: "Enable debug mode"
     default: false
+  tunnel-proxy-sha256:
+    type: string
+    description: >
+      Expected SHA256 hex digest of the tunnel-proxy binary. When non-empty,
+      the binary is verified after download (or cache restore). Only meaningful
+      when tunnel-proxy-version is pinned; the digest changes with every
+      release. Leave empty to skip verification.
+    default: ""
 
 steps:
   - run:
@@ -72,6 +80,7 @@ steps:
       steps:
         - restore_cache:
             keys:
+              # yamllint disable-line rule:line-length
               - << parameters.cache-version >>-tunnel-proxy-{{ checksum "/tmp/.tunnel-proxy-version" }}
   - run:
       name: Launch tunnel proxy
@@ -79,12 +88,14 @@ steps:
       environment:
         PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
         PARAM_NO_PROXY: << parameters.no-proxy >>
+        PARAM_TUNNEL_PROXY_SHA256: << parameters.tunnel-proxy-sha256 >>
         DEBUG: << parameters.debug >>
       command: <<include(scripts/launch-proxy.sh)>>
   - when:
       condition: << parameters.cache >>
       steps:
         - save_cache:
+            # yamllint disable-line rule:line-length
             key: << parameters.cache-version >>-tunnel-proxy-{{ checksum "/tmp/.tunnel-proxy-version" }}
             paths:
               - /tmp/tunnel-proxy-bin
@@ -92,9 +103,7 @@ steps:
       name: tunnel-proxy logs
       shell: bash
       background: true
-      command: |
-        touch "${TMPDIR:-/tmp}/tunnel-proxy.log"
-        tail -f "${TMPDIR:-/tmp}/tunnel-proxy.log"
+      command: <<include(scripts/tail-logs.sh)>>
   - when:
       condition: << parameters.verify-tunnel >>
       steps:
@@ -105,3 +114,13 @@ steps:
               PARAM_VERIFY_ATTEMPTS: << parameters.verify-tunnel-attempts >>
               DEBUG: << parameters.debug >>
             command: <<include(scripts/verify-tunnel.sh)>>
+  - when:
+      condition: << parameters.debug >>
+      steps:
+        - run:
+            name: Dump tunnel-proxy logs
+            shell: bash
+            when: on_fail
+            command: |
+              echo "=== tunnel-proxy.log ==="
+              cat "${TMPDIR:-/tmp}/tunnel-proxy.log" || true

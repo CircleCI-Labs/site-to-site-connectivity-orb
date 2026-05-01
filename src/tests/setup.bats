@@ -397,6 +397,37 @@ NOHUPEOF
   ! grep -q 'HTTPS_PROXY' "$ps_profile"
 }
 
+@test "launch-proxy verifies SHA256 of binary when PARAM_TUNNEL_PROXY_SHA256 is set" {
+  # Pre-create binary with known content; skip download by placing it at the expected path
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  mkdir -p /tmp/tunnel-proxy-bin
+  printf '#!/bin/bash\nexit 0\n' > /tmp/tunnel-proxy-bin/tunnel-proxy
+  chmod +x /tmp/tunnel-proxy-bin/tunnel-proxy
+
+  local sha
+  if command -v sha256sum &>/dev/null; then
+    sha=$(sha256sum /tmp/tunnel-proxy-bin/tunnel-proxy | awk '{print $1}')
+  else
+    sha=$(shasum -a 256 /tmp/tunnel-proxy-bin/tunnel-proxy | awk '{print $1}')
+  fi
+
+  export PARAM_TUNNEL_PROXY_SHA256="$sha"
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"SHA256 verified"* ]]
+}
+
+@test "launch-proxy fails when SHA256 does not match" {
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  mkdir -p /tmp/tunnel-proxy-bin
+  printf '#!/bin/bash\nexit 0\n' > /tmp/tunnel-proxy-bin/tunnel-proxy
+  chmod +x /tmp/tunnel-proxy-bin/tunnel-proxy
+
+  export PARAM_TUNNEL_PROXY_SHA256="0000000000000000000000000000000000000000000000000000000000000000"
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -ne 0 ]
+}
+
 @test "cleanup removes PowerShell profile entries on Windows" {
   local ps_profile="$TEST_TMP/ps_profile.ps1"
   cat > "$ps_profile" <<'PS1EOF'
