@@ -7,12 +7,30 @@ filters: &filters
   tags:
     only: /.*/
 
-# Shared steps for every smoke test: setup, optional verify, cleanup.
+# Shared steps for every smoke test: setup, connectivity checks, cleanup.
 # All smoke tests require context: site-to-site-tunnel.
 smoke_steps: &smoke_steps
   steps:
     - checkout
     - continuation/setup
+    - run:
+        name: Verify tunnel connectivity to internal hosts
+        shell: bash
+        command: |
+          failed=0
+          for host in \
+            api.fieldeng-sphereci.com \
+            backend.fieldeng-sphereci.com \
+            frontend.fieldeng-sphereci.com; do
+            http_code=$(curl -k -s -o /dev/null -w "%{http_code}" \
+              --max-time 15 "https://${host}/" 2>/dev/null || true)
+            echo "${host}: HTTP ${http_code}"
+            if [[ "${http_code:-0}" -le 0 ]]; then
+              echo "  ERROR: no response from ${host}"
+              failed=1
+            fi
+          done
+          [ "$failed" -eq 0 ] || exit 1
     - continuation/cleanup
 
 jobs:
@@ -58,8 +76,8 @@ jobs:
   # ── macOS executor ─────────────────────────────────────────────────────────
   macos-smoke-test:
     macos:
-      xcode: "16.1.0"
-    resource_class: macos.m1.medium.gen1
+      xcode: "16.3.0"
+    resource_class: m4pro.medium
     <<: *smoke_steps
 
   # ── Windows executor ──────────────────────────────────────────────────────
