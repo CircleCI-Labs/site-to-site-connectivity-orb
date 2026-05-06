@@ -104,25 +104,13 @@ jobs:
           name: Verify tunnel connectivity to internal hosts
           shell: powershell.exe
           command: |
-            [Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            $proxyAddr = "http://127.0.0.1:4140"
-            $portTest = Test-NetConnection -ComputerName 127.0.0.1 -Port 4140 -WarningAction SilentlyContinue
-            Write-Host "Proxy port 4140 listening: $($portTest.TcpTestSucceeded)"
             $failed = $false
             foreach ($h in @("api.fieldeng-sphereci.com","backend.fieldeng-sphereci.com","frontend.fieldeng-sphereci.com")) {
-              try {
-                $r = Invoke-WebRequest -Uri "https://$h/" -UseBasicParsing -TimeoutSec 15 -Proxy $proxyAddr
-                Write-Host "${h}: HTTP $($r.StatusCode)"
-              } catch {
-                $code = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
-                Write-Host "${h}: exception=$($_.Exception.GetType().Name) msg=$($_.Exception.Message)"
-                if ($code -gt 0) {
-                  Write-Host "${h}: HTTP $code"
-                } else {
-                  Write-Host "${h}: ERROR - no response"
-                  $failed = $true
-                }
+              $code = & curl.exe -k -s -o /dev/null -w "%{http_code}" --max-time 15 --proxy "http://127.0.0.1:4140" "https://$h/" 2>$null
+              Write-Host "${h}: HTTP $code"
+              if ([int]$code -le 0) {
+                Write-Host "  ERROR: no response from $h"
+                $failed = $true
               }
             }
             if ($failed) { exit 1 }
