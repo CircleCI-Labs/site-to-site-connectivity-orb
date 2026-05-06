@@ -56,7 +56,7 @@ Registers the executor IP, fetches tunnel configuration, downloads `tunnel-proxy
 | `verify-tunnel` | boolean | `true` | Verify each tunnel is reachable before the step completes |
 | `verify-tunnel-attempts` | integer | `5` | Number of connection attempts per tunnel during verification |
 | `debug` | boolean | `false` | Enable verbose debug logging. When `true`, a log-dump step is appended that prints `tunnel-proxy.log` whenever a previous step fails — making tunnel startup failures immediately visible without manual log inspection. |
-| `tunnel-proxy-sha256` | string | `""` | Expected SHA256 hex digest of the `tunnel-proxy` binary. When non-empty, the binary is verified after download or cache restore. Only meaningful when `tunnel-proxy-version` is also pinned. Leave empty to skip verification. |
+| `verify-checksum` | boolean | `true` | Verify the `tunnel-proxy` binary against the SHA256 digest published in the GitHub release. The digest is fetched automatically from the GitHub API — no manual hash lookup required. Set to `false` to skip. |
 
 **Exports to subsequent steps via `$BASH_ENV`:**
 
@@ -169,19 +169,16 @@ jobs:
     cache: false
 ```
 
-### Pin a version with SHA256 verification
+### Binary checksum verification
 
-For maximum supply-chain security, pin both the version and the expected binary digest. If the binary is tampered with (or the wrong file is served), the job fails before the proxy ever starts.
+By default (`verify-checksum: true`), `setup` fetches the SHA256 digest for the platform-specific binary directly from the GitHub releases API and verifies the downloaded binary against it. No manual hash lookup required. The verification runs whether the binary was just downloaded or restored from cache.
 
-Retrieve the digest by running `sha256sum tunnel-proxy_linux_amd64` (or `shasum -a 256` on macOS) after a trusted download, then record it in your pipeline configuration:
+To skip verification:
 
 ```yaml
 - site-to-site-connectivity/setup:
-    tunnel-proxy-version: v0.0.3
-    tunnel-proxy-sha256: <sha256-hex-of-tunnel-proxy_linux_amd64>
+    verify-checksum: false
 ```
-
-Verification runs whether the binary was just downloaded or restored from cache.
 
 ### Bust the cache after a forced upgrade
 

@@ -51,14 +51,13 @@ parameters:
     type: boolean
     description: "Enable debug mode"
     default: false
-  tunnel-proxy-sha256:
-    type: string
+  verify-checksum:
+    type: boolean
     description: >
-      Expected SHA256 hex digest of the tunnel-proxy binary. When non-empty,
-      the binary is verified after download (or cache restore). Only meaningful
-      when tunnel-proxy-version is pinned; the digest changes with every
-      release. Leave empty to skip verification.
-    default: ""
+      Verify the tunnel-proxy binary against the SHA256 digest published in the
+      GitHub release. The digest is fetched automatically from the GitHub API —
+      no manual hash lookup required. Set to false to skip verification.
+    default: true
 
 steps:
   - run:
@@ -92,7 +91,7 @@ steps:
       environment:
         PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
         PARAM_NO_PROXY: << parameters.no-proxy >>
-        PARAM_TUNNEL_PROXY_SHA256: << parameters.tunnel-proxy-sha256 >>
+        PARAM_VERIFY_CHECKSUM: << parameters.verify-checksum >>
         DEBUG: << parameters.debug >>
       command: <<include(scripts/launch-proxy.sh)>>
   - when:

@@ -19,6 +19,7 @@ setup() {
   export WIN_TMP="$TEST_TMP/c_tmp"
   unset DEBUG
   unset PARAM_TUNNEL_PROXY_VERSION
+  export PARAM_VERIFY_CHECKSUM=false
 
   write_curl_mock "$MOCK_SINGLE_TUNNEL"
 }
@@ -398,8 +399,7 @@ NOHUPEOF
   ! grep -q 'HTTPS_PROXY' "$ps_profile"
 }
 
-@test "launch-proxy verifies SHA256 of binary when PARAM_TUNNEL_PROXY_SHA256 is set" {
-  # Pre-create binary with known content; skip download by placing it at the expected path
+@test "launch-proxy verifies SHA256 against GitHub releases API digest" {
   echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
   mkdir -p /tmp/tunnel-proxy-bin
   printf '#!/bin/bash\nexit 0\n' > /tmp/tunnel-proxy-bin/tunnel-proxy
@@ -412,21 +412,43 @@ NOHUPEOF
     sha=$(shasum -a 256 /tmp/tunnel-proxy-bin/tunnel-proxy | awk '{print $1}')
   fi
 
-  export PARAM_TUNNEL_PROXY_SHA256="$sha"
+  # Override curl mock so the GitHub API returns the correct digest for all platforms
+  cat > "$MOCK_BIN/curl" <<CURLEOF
+#!/bin/bash
+if [[ "\$*" == *"api.github.com"* ]]; then
+  echo '{"tag_name":"v0.0.3","assets":[{"name":"tunnel-proxy_linux_amd64","digest":"sha256:${sha}"},{"name":"tunnel-proxy_linux_arm64","digest":"sha256:${sha}"},{"name":"tunnel-proxy_darwin_amd64","digest":"sha256:${sha}"},{"name":"tunnel-proxy_darwin_arm64","digest":"sha256:${sha}"},{"name":"tunnel-proxy_windows_amd64.exe","digest":"sha256:${sha}"}]}'
+  exit 0
+fi
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  export PARAM_VERIFY_CHECKSUM=true
   run bash src/scripts/launch-proxy.sh
   [ "$status" -eq 0 ]
   [[ "$output" == *"SHA256 verified"* ]]
 }
 
-@test "launch-proxy fails when SHA256 does not match" {
+@test "launch-proxy fails when binary SHA256 does not match GitHub release digest" {
   echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
   mkdir -p /tmp/tunnel-proxy-bin
   printf '#!/bin/bash\nexit 0\n' > /tmp/tunnel-proxy-bin/tunnel-proxy
   chmod +x /tmp/tunnel-proxy-bin/tunnel-proxy
 
-  export PARAM_TUNNEL_PROXY_SHA256="0000000000000000000000000000000000000000000000000000000000000000"
+  cat > "$MOCK_BIN/curl" <<'CURLEOF'
+#!/bin/bash
+if [[ "$*" == *"api.github.com"* ]]; then
+  echo '{"tag_name":"v0.0.3","assets":[{"name":"tunnel-proxy_linux_amd64","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},{"name":"tunnel-proxy_linux_arm64","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},{"name":"tunnel-proxy_darwin_amd64","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},{"name":"tunnel-proxy_darwin_arm64","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},{"name":"tunnel-proxy_windows_amd64.exe","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}]}'
+  exit 0
+fi
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  export PARAM_VERIFY_CHECKSUM=true
   run bash src/scripts/launch-proxy.sh
   [ "$status" -ne 0 ]
+  [[ "$output" == *"SHA256 mismatch"* ]]
 }
 
 @test "cleanup removes PowerShell profile entries on Windows" {
