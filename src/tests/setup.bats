@@ -20,40 +20,40 @@ setup() {
   unset PARAM_TUNNEL_PROXY_VERSION
 
   write_curl_mock "$MOCK_SINGLE_TUNNEL"
-  mock_cmd tunnel-proxy 0 ""
 }
 
 teardown() {
+  lsof -ti tcp:4140 2>/dev/null | xargs kill 2>/dev/null || true
   rm -rf "$TEST_TMP"
 }
 
-@test "setup fails when CIRCLE_OIDC_TOKEN is unset" {
+@test "register fails when CIRCLE_OIDC_TOKEN is unset" {
   unset CIRCLE_OIDC_TOKEN
-  run bash src/scripts/setup.sh
+  run bash src/scripts/register.sh
   [ "$status" -ne 0 ]
   [[ "$output" == *"CIRCLE_OIDC_TOKEN"* ]]
 }
 
-@test "setup exports EXECUTOR_IP to BASH_ENV" {
-  run bash src/scripts/setup.sh
+@test "register exports EXECUTOR_IP to BASH_ENV" {
+  run bash src/scripts/register.sh
   [ "$status" -eq 0 ]
   grep -q 'EXECUTOR_IP="1.2.3.4"' "$BASH_ENV"
 }
 
 @test "setup exports HTTPS_PROXY when vcs tunnel exists" {
-  run bash src/scripts/setup.sh
+  run bash -c "bash src/scripts/register.sh && bash src/scripts/launch-proxy.sh"
   [ "$status" -eq 0 ]
   grep -q 'HTTPS_PROXY' "$BASH_ENV"
 }
 
 @test "setup exports NO_PROXY when HTTPS_PROXY is set" {
-  run bash src/scripts/setup.sh
+  run bash -c "bash src/scripts/register.sh && bash src/scripts/launch-proxy.sh"
   [ "$status" -eq 0 ]
   grep -q 'NO_PROXY' "$BASH_ENV"
 }
 
 @test "setup writes SSH config ProxyCommand for vcs-ssh tunnel" {
-  run bash src/scripts/setup.sh
+  run bash -c "bash src/scripts/register.sh && bash src/scripts/launch-proxy.sh"
   [ "$status" -eq 0 ]
   grep -q "Host ghe.corp.test" "$HOME/.ssh/config"
   grep -q "ProxyCommand" "$HOME/.ssh/config"
@@ -64,7 +64,7 @@ teardown() {
 @test "setup writes SSH config entry for each host in multi-tunnel response" {
   write_curl_mock "$MOCK_MULTI_TUNNEL"
 
-  run bash src/scripts/setup.sh
+  run bash -c "bash src/scripts/register.sh && bash src/scripts/launch-proxy.sh"
   [ "$status" -eq 0 ]
   grep -q "Host ghe.corp1.test" "$HOME/.ssh/config"
   grep -q "Host gitlab.corp2.test" "$HOME/.ssh/config"
@@ -105,7 +105,7 @@ exit 0
 CURLEOF
   chmod +x "$MOCK_BIN/curl"
 
-  run bash src/scripts/setup.sh
+  run bash -c "bash src/scripts/register.sh && bash src/scripts/launch-proxy.sh"
   [ "$status" -eq 0 ]
   grep -q "CircleCI-Labs/site-to-site-tunnel-proxy" "$curl_calls"
 }
@@ -113,12 +113,12 @@ CURLEOF
 @test "setup skips HTTPS_PROXY when only vcs-ssh tunnel exists" {
   write_curl_mock "$MOCK_SSH_ONLY_TUNNEL"
 
-  run bash src/scripts/setup.sh
+  run bash -c "bash src/scripts/register.sh && bash src/scripts/launch-proxy.sh"
   [ "$status" -eq 0 ]
   ! grep -q 'HTTPS_PROXY' "$BASH_ENV"
 }
 
-@test "setup retries tunnel-details on HTTP 500 and succeeds" {
+@test "register retries tunnel-details on HTTP 500 and succeeds" {
   local call_count_file="$TEST_TMP/td_calls"
   echo 0 > "$call_count_file"
   cat > "$MOCK_BIN/curl" <<CURLEOF
@@ -158,11 +158,11 @@ CURLEOF
 
   export PARAM_REG_RETRY_ATTEMPTS=3
   export PARAM_REG_RETRY_DELAY=0
-  run bash src/scripts/setup.sh
+  run bash src/scripts/register.sh
   [ "$status" -eq 0 ]
 }
 
-@test "setup fails when tunnel-details returns non-200 after all retries" {
+@test "register fails when tunnel-details returns non-200 after all retries" {
   cat > "$MOCK_BIN/curl" <<'CURLEOF'
 #!/bin/bash
 if [[ "$*" == *"checkip"* ]]; then echo "1.2.3.4"; exit 0; fi
@@ -177,21 +177,45 @@ CURLEOF
 
   export PARAM_REG_RETRY_ATTEMPTS=2
   export PARAM_REG_RETRY_DELAY=0
-  run bash src/scripts/setup.sh
+  run bash src/scripts/register.sh
   [ "$status" -ne 0 ]
   [[ "$output" == *"tunnel-details"* ]]
 }
 
 @test "setup PATH export does not bake in current PATH value" {
-  run bash src/scripts/setup.sh
+  run bash -c "bash src/scripts/register.sh && bash src/scripts/launch-proxy.sh"
   [ "$status" -eq 0 ]
   grep -qF '$PATH"' "$BASH_ENV"
 }
 
 @test "setup appends PARAM_NO_PROXY to NO_PROXY" {
   export PARAM_NO_PROXY="internal.corp.test,*.corp.test"
-  run bash src/scripts/setup.sh
+  run bash -c "bash src/scripts/register.sh && bash src/scripts/launch-proxy.sh"
   [ "$status" -eq 0 ]
   grep -q 'NO_PROXY=.*internal.corp.test' "$BASH_ENV"
   grep -q 'NO_PROXY=.*circleci.com' "$BASH_ENV"
+}
+
+@test "launch-proxy fails and dumps log when tunnel-proxy crashes on startup" {
+  local crash_stub="$MOCK_BIN/crash-stub"
+  printf '#!/bin/bash\nif [[ "$1" == "serve" ]]; then echo "fatal: failed to initialize" >&2; exit 1; fi\nexit 0\n' > "$crash_stub"
+  chmod +x "$crash_stub"
+  write_curl_mock_with_stub "$MOCK_SINGLE_TUNNEL" "$crash_stub"
+
+  bash src/scripts/register.sh
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"exited unexpectedly"* ]]
+}
+
+@test "launch-proxy fails and dumps log when tunnel-proxy does not bind to port 4140" {
+  local sleep_stub="$MOCK_BIN/sleep-stub"
+  printf '#!/bin/bash\nif [[ "$1" == "serve" ]]; then sleep 30; fi\nexit 0\n' > "$sleep_stub"
+  chmod +x "$sleep_stub"
+  write_curl_mock_with_stub "$MOCK_SINGLE_TUNNEL" "$sleep_stub"
+
+  bash src/scripts/register.sh
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"did not bind to port 4140"* ]]
 }
