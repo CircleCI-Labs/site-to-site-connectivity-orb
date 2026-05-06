@@ -28,7 +28,7 @@ if ! command -v jq &>/dev/null; then
   esac
 fi
 
-ip="$(curl --fail --max-time 10 https://checkip.amazonaws.com/ | tr -d '[:space:]')"
+ip="$(curl -s --fail --max-time 10 https://checkip.amazonaws.com/ | tr -d '[:space:]')"
 echo "Registering IP: $ip"
 
 max_attempts="${PARAM_REG_RETRY_ATTEMPTS:-5}"
@@ -37,7 +37,7 @@ attempt=0
 http_code=0
 until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do
   attempt=$((attempt + 1))
-  echo "IP registration attempt ${attempt}/${max_attempts} (timeout: 30s)..."
+  [ "$attempt" -gt 1 ] && echo "IP registration attempt ${attempt}/${max_attempts} (timeout: 30s)..."
   reg_body=$(mktemp)
   http_code=$(curl -s -o "${reg_body}" -w "%{http_code}" \
     --max-time 30 --connect-timeout 10 \
@@ -46,7 +46,7 @@ until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do
     -H "Content-Type: application/json" \
     -d "{\"ip\":\"${ip}\"}" \
     "https://internal.circleci.com/api/private/site-to-site/ip-policy/register")
-  echo "  HTTP ${http_code}"
+  [ "$http_code" -ne 200 ] && echo "  HTTP ${http_code}"
   if [[ "${DEBUG:-}" == "true" ]]; then
     echo "  Response body: $(cat "${reg_body}")"
   fi
@@ -78,13 +78,13 @@ td_attempt=0
 td_http_code=0
 until [ "$td_http_code" -eq 200 ] || [ "$td_attempt" -ge "$max_attempts" ]; do
   td_attempt=$((td_attempt + 1))
-  echo "Tunnel-details attempt ${td_attempt}/${max_attempts} (timeout: 30s)..."
+  [ "$td_attempt" -gt 1 ] && echo "Tunnel-details attempt ${td_attempt}/${max_attempts} (timeout: 30s)..."
   td_http_code=$(curl -s -o "${td_response}" -w "%{http_code}" \
     --max-time 30 --connect-timeout 10 \
     -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
     -H "Accept: application/json" \
     "https://internal.circleci.com/api/private/site-to-site/tunnel-details")
-  echo "  HTTP ${td_http_code}"
+  [ "$td_http_code" -ne 200 ] && echo "  HTTP ${td_http_code}"
   if [[ "${DEBUG:-}" == "true" ]]; then
     echo "  Response body: $(cat "${td_response}")"
   fi

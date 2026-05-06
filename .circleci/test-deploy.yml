@@ -160,10 +160,6 @@ workflows:
           context: site-to-site-tunnel
           requires: [publish-dev]
           filters: *filters
-      - windows-arm-smoke-test:
-          context: site-to-site-tunnel
-          requires: [publish-dev]
-          filters: *filters
       - gpu-linux-smoke-test:
           context: site-to-site-tunnel
           requires: [publish-dev]
@@ -184,7 +180,6 @@ workflows:
             - macos-smoke-test
             - windows-smoke-test
             - windows-powershell-smoke-test
-            - windows-arm-smoke-test
             - gpu-linux-smoke-test
           context: orb-publishing
           filters:
