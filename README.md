@@ -30,7 +30,7 @@ This orb:
 | macOS | `xcode: 16.x`, `macos.m1.medium.gen1` | arm64 (M1/M2) | |
 | Windows (bash.exe) | `windows-server-2022-gui:current` | amd64 | `shell: bash.exe` optional at executor level |
 | Windows (PowerShell) | `windows-server-2022-gui:current` | amd64 | Works — orb forces `shell: bash` per-step |
-| Windows ARM | `windows-server-2022-gui:current` | arm64 | Available on CircleCI, currently undocumented |
+| Windows ARM | `windows-11-arm:current` | arm64 | ⚠️ Experimental — supported but untested. Use with caution. |
 | GPU (Linux) | `ubuntu-2204-cuda12:current` | amd64 | Treated as a standard Linux machine |
 
 All orb `run` steps explicitly use `shell: bash`, so the orb works regardless of the executor's default shell. On Windows, bash resolves to Git Bash (pre-installed on all CircleCI Windows images). You do **not** need to set `shell: bash.exe` at the executor level, though doing so is harmless.
@@ -201,6 +201,8 @@ Verification runs whether the binary was just downloaded or restored from cache.
 Linux and Windows jobs get separate cache entries automatically because the checksum file includes the OS and architecture (e.g. `v0.0.3-linux-amd64` vs `v0.0.3-windows-amd64`).
 
 On a cache hit, the download is skipped entirely. On a cache miss, the binary is downloaded and cached for subsequent jobs.
+
+**Using `latest` with caching:** When `tunnel-proxy-version: latest` (the default), `setup` always makes one GitHub API call per job to resolve the current release tag. That resolved tag then determines the cache key. Same release = cache hit; new release = automatic cache miss and fresh download. This means `latest` stays up-to-date automatically without any manual intervention.
 
 ## Resources
 

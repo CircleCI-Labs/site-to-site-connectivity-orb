@@ -2,8 +2,11 @@
 version: 2.1
 
 description: >
-  A CircleCI orb for setting up site to site connectivity via CircleCI
-  tunnels to enable secure access to private repositories and resources
+  A CircleCI orb for setting up site-to-site connectivity via CircleCI tunnels.
+  Enables secure access to private repositories and resources from any executor:
+  Docker, Linux machine (amd64/arm64), macOS, Windows (bash or PowerShell),
+  and GPU. Configures HTTPS_PROXY and SSH ProxyCommand transparently — no
+  proxy awareness required in your pipeline steps.
 
 display:
   home_url: "https://circleci.com/docs/"

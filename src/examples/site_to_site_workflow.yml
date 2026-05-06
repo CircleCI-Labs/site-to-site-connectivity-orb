@@ -8,7 +8,7 @@ usage:
   version: 2.1
 
   orbs:
-    site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
+    site-to-site-connectivity: cci-labs/site-to-site-connectivity@1.0.0
 
   jobs:
     build-with-private-repo-linux:
