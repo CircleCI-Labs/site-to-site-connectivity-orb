@@ -106,7 +106,7 @@ jobs:
           command: |
             $failed = $false
             foreach ($h in @("api.fieldeng-sphereci.com","backend.fieldeng-sphereci.com","frontend.fieldeng-sphereci.com")) {
-              $code = & curl.exe -k -s -o /dev/null -w "%{http_code}" --max-time 15 --proxy "http://127.0.0.1:4140" "https://$h/" 2>$null
+              $code = & curl.exe -k -s -o /dev/null -w "%{http_code}" --max-time 15 "https://$h/" 2>$null
               Write-Host "${h}: HTTP $code"
               if ([int]$code -le 0) {
                 Write-Host "  ERROR: no response from $h"

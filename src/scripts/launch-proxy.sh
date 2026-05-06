@@ -142,30 +142,31 @@ Host ${host}
 EOF
 done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "ssh") | [.internal_host, .tunnel_domain] | @tsv' | tr -d '\r')
 
-# On Windows, also write env vars into the PowerShell profile so they are
-# available in every subsequent PowerShell step without any user configuration.
-# $PROFILE.AllUsersCurrentHost is sourced by powershell.exe at startup;
-# CircleCI does not pass -NoProfile to job steps.
+# On Windows, write env vars into the PowerShell profile so they are available
+# in every subsequent PowerShell step without any user configuration.
+# Use PowerShell itself (via a temp script) to write to $PROFILE.AllUsersCurrentHost
+# — bash/cygpath path mapping is unreliable for locating the correct profile file.
 if [ "$os" = "windows" ]; then
-  # shellcheck disable=SC2016
-  _ps_profile_win=$(powershell.exe -NoProfile -NonInteractive \
-    -Command '$PROFILE.AllUsersCurrentHost' 2>/dev/null | tr -d '\r\n' || true)
-  if [ -n "$_ps_profile_win" ]; then
-    _ps_profile=$(cygpath "$_ps_profile_win" 2>/dev/null || echo "$_ps_profile_win")
-    mkdir -p "$(dirname "$_ps_profile")" 2>/dev/null || true
-    _win_bin=$(cygpath -w "${WIN_TMP}/tunnel-proxy-bin" 2>/dev/null || printf '%s' 'C:\tmp\tunnel-proxy-bin')
-    # Escape single quotes for PowerShell string literals (PS doubles them: '' → ')
-    _win_bin_ps="${_win_bin//\'/\'\'}"
-    _no_proxy_ps="${no_proxy//\'/\'\'}"
-    {
-      printf '\n# BEGIN site-to-site-orb\n'
-      printf "\$env:PATH = '%s;' + \$env:PATH\n" "$_win_bin_ps"
-      if [ -n "$no_proxy" ]; then
-        printf "\$env:HTTPS_PROXY = 'http://127.0.0.1:4140'\n"
-        printf "\$env:NO_PROXY = '%s'\n" "$_no_proxy_ps"
-      fi
-      printf '# END site-to-site-orb\n'
-    } >> "$_ps_profile"
-    echo "PowerShell profile updated: $_ps_profile"
-  fi
+  _win_bin=$(cygpath -w "${WIN_TMP}/tunnel-proxy-bin" 2>/dev/null || printf '%s' 'C:\tmp\tunnel-proxy-bin')
+  # Escape single quotes for PowerShell string literals (PS doubles them: '' → ')
+  _win_bin_ps="${_win_bin//\'/\'\'}"
+  _no_proxy_ps="${no_proxy//\'/\'\'}"
+
+  _ps_script="${WIN_TMP}/site-to-site-orb-profile.ps1"
+  {
+    printf '$profileDir = Split-Path $PROFILE.AllUsersCurrentHost\n'
+    printf 'if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir -Force | Out-Null }\n'
+    printf 'if (-not (Test-Path $PROFILE.AllUsersCurrentHost)) { New-Item -ItemType File -Path $PROFILE.AllUsersCurrentHost -Force | Out-Null }\n'
+    printf '"" | Add-Content $PROFILE.AllUsersCurrentHost\n'
+    printf '"# BEGIN site-to-site-orb" | Add-Content $PROFILE.AllUsersCurrentHost\n'
+    printf '"`$env:PATH = '"'"'%s;'"'"' + `$env:PATH" | Add-Content $PROFILE.AllUsersCurrentHost\n' "$_win_bin_ps"
+    if [ -n "$no_proxy" ]; then
+      printf '"`$env:HTTPS_PROXY = '"'"'http://127.0.0.1:4140'"'"'" | Add-Content $PROFILE.AllUsersCurrentHost\n'
+      printf '"`$env:NO_PROXY = '"'"'%s'"'"'" | Add-Content $PROFILE.AllUsersCurrentHost\n' "$_no_proxy_ps"
+    fi
+    printf '"# END site-to-site-orb" | Add-Content $PROFILE.AllUsersCurrentHost\n'
+    printf 'Write-Host ("PowerShell profile updated: " + $PROFILE.AllUsersCurrentHost)\n'
+  } > "$_ps_script"
+  powershell.exe -NoProfile -NonInteractive -File "$(cygpath -w "$_ps_script")" 2>/dev/null || true
+  rm -f "$_ps_script"
 fi
