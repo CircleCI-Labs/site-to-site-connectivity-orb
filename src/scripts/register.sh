@@ -7,27 +7,6 @@ if [ -z "${CIRCLE_OIDC_TOKEN:-}" ]; then
   exit 1
 fi
 
-# jq is required; on Windows x64 it may not be pre-installed so download automatically.
-# On all other platforms the image is expected to provide jq.
-if ! command -v jq &>/dev/null; then
-  os_check="$(uname -s | tr '[:upper:]' '[:lower:]')"
-  case "$os_check" in
-    msys_nt* | msys* | mingw* | cygwin*)
-      echo "jq not found, installing..."
-      jq_bin="${TMPDIR:-/tmp/}jq.exe"
-      echo "Downloading jq for windows-amd64..."
-      curl -fsSL --max-time 60 -o "${jq_bin}" \
-        "https://github.com/jqlang/jq/releases/latest/download/jq-windows-amd64.exe"
-      export PATH="${TMPDIR:-/tmp/}:${PATH}"
-      echo "export PATH=\"${TMPDIR:-/tmp/}:\$PATH\"" >>"$BASH_ENV"
-      ;;
-    *)
-      echo "Error: jq is not installed. Please ensure jq is available in your executor image." >&2
-      exit 1
-      ;;
-  esac
-fi
-
 ip="$(curl -s --fail --max-time 10 https://checkip.amazonaws.com/ | tr -d '[:space:]')"
 echo "Registering IP: $ip"
 

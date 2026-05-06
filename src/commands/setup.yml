@@ -62,6 +62,10 @@ parameters:
 
 steps:
   - run:
+      name: Check required tools
+      shell: bash
+      command: <<include(scripts/preflight.sh)>>
+  - run:
       name: Authorize tunnel and fetch configuration
       shell: bash
       environment:
