@@ -95,12 +95,30 @@ EOF
 }
 
 # write_powershell_mock <profile_path>
-# Mocks powershell.exe (returns profile_path for AllUsersCurrentHost queries)
-# and cygpath (handles -w unix→windows and plain windows→unix conversions).
+# Mocks powershell.exe: handles -File <script> by simulating Add-Content calls
+# (writing profile content), and AllUsersCurrentHost queries (returning the path).
+# Also mocks cygpath (handles -w unix→windows and plain windows→unix conversions).
 write_powershell_mock() {
   local ps_profile="$1"
   cat > "$MOCK_BIN/powershell.exe" <<EOF
 #!/bin/bash
+if [[ "\$*" == *"-File"* ]]; then
+  prev=""
+  script_win=""
+  for a in "\$@"; do
+    [[ "\$prev" == "-File" ]] && { script_win="\$a"; break; }
+    prev="\$a"
+  done
+  # Convert Windows path (C:\foo\bar) to unix (/foo/bar)
+  script_unix="\$(echo "\$script_win" | sed 's|^[A-Za-z]:||; s|\\\\\\\\|/|g; s|\\\\|/|g')"
+  if [[ -f "\$script_unix" ]]; then
+    mkdir -p "\$(dirname "${ps_profile}")"
+    touch "${ps_profile}"
+    # Simulate Add-Content: extract content from '"text" | Add-Content ...' lines
+    sed -n 's/^"\\(.*\\)" | Add-Content.*/\\1/p' "\$script_unix" >> "${ps_profile}"
+  fi
+  exit 0
+fi
 if [[ "\$*" == *"AllUsersCurrentHost"* ]]; then echo "${ps_profile}"; exit 0; fi
 exit 0
 EOF
