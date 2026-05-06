@@ -105,11 +105,10 @@ jobs:
           shell: powershell.exe
           command: |
             [Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
-            $proxy = if ($env:HTTPS_PROXY) { @{Proxy = $env:HTTPS_PROXY} } else { @{} }
             $failed = $false
             foreach ($h in @("api.fieldeng-sphereci.com","backend.fieldeng-sphereci.com","frontend.fieldeng-sphereci.com")) {
               try {
-                $r = Invoke-WebRequest -Uri "https://$h/" -UseBasicParsing -TimeoutSec 15 @proxy
+                $r = Invoke-WebRequest -Uri "https://$h/" -UseBasicParsing -TimeoutSec 15 -Proxy "http://127.0.0.1:4140"
                 Write-Host "${h}: HTTP $($r.StatusCode)"
               } catch {
                 $code = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
