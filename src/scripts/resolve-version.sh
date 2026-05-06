@@ -32,7 +32,16 @@ else
   echo "Using pinned tunnel-proxy version: ${version}"
 fi
 
-# Write platform-specific version string to a fixed path so CircleCI's
-# {{ checksum }} template can reference it for restore_cache / save_cache keys.
-echo "${version}-${os}-${arch}" > /tmp/.tunnel-proxy-version
-echo "Cache key content: $(cat /tmp/.tunnel-proxy-version)"
+# Write platform-specific version string so CircleCI's {{ checksum }} template
+# can reference it for restore_cache / save_cache keys.
+# On Windows, CircleCI resolves the /tmp/ path in YAML to C:\tmp\ but Git Bash
+# maps /tmp/ to a different location; /c/tmp/ (C:\tmp\) is the agreed path.
+# WIN_TMP can be overridden in tests where /c/ is not writable.
+WIN_TMP="${WIN_TMP:-/c/tmp}"
+version_file="/tmp/.tunnel-proxy-version"
+if [ "$os" = "windows" ]; then
+  mkdir -p "${WIN_TMP}"
+  version_file="${WIN_TMP}/.tunnel-proxy-version"
+fi
+echo "${version}-${os}-${arch}" > "$version_file"
+echo "Cache key content: $(cat "$version_file")"

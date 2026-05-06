@@ -30,7 +30,7 @@ fi
 got_o=false
 for arg in "\$@"; do
   if \$got_o; then
-    mkdir -p /tmp/tunnel-proxy-bin
+    mkdir -p "\$(dirname "\$arg")"
     cp "${stub_file}" "\$arg"
     chmod +x "\$arg" 2>/dev/null || true
     exit 0

@@ -12,7 +12,12 @@ esac
 
 ext=""
 [ "$os" = "windows" ] && ext=".exe"
-proxy_bin="/tmp/tunnel-proxy-bin/tunnel-proxy${ext}"
+WIN_TMP="${WIN_TMP:-/c/tmp}"
+if [ "$os" = "windows" ]; then
+  proxy_bin="${WIN_TMP}/tunnel-proxy-bin/tunnel-proxy${ext}"
+else
+  proxy_bin="/tmp/tunnel-proxy-bin/tunnel-proxy${ext}"
+fi
 
 echo "Verifying tunnel connectivity"
 while IFS=$'\t' read -r service_type internal_host tunnel_domain; do
@@ -57,6 +62,6 @@ while IFS=$'\t' read -r service_type internal_host tunnel_domain; do
     echo "Error: Could not verify connection to ${internal_host} via ${tunnel_domain}:443"
     exit 1
   fi
-done < <(echo "$tunnel_details" | jq -r '.tunnels[] | [.service_type, .internal_host, .tunnel_domain] | @tsv')
+done < <(echo "$tunnel_details" | jq -r '.tunnels[] | [.service_type, .internal_host, .tunnel_domain] | @tsv' | tr -d '\r')
 
 echo "CircleCI tunnel setup complete"

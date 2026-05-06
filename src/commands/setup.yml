@@ -20,7 +20,7 @@ parameters:
     description: >
       Cache key prefix for the tunnel-proxy binary. Increment (e.g. "v2")
       to force a fresh download and discard any previously cached binary.
-    default: "v1"
+    default: "v2"
   registration-retry-attempts:
     type: integer
     description: "Number of retry attempts for IP registration on 500 errors"

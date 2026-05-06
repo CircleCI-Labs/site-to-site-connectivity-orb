@@ -16,6 +16,7 @@ setup() {
   export CIRCLE_OIDC_TOKEN="test-oidc-token"
   export PARAM_REG_RETRY_ATTEMPTS=1
   export PARAM_REG_RETRY_DELAY=0
+  export WIN_TMP="$TEST_TMP/c_tmp"
   unset DEBUG
   unset PARAM_TUNNEL_PROXY_VERSION
 
@@ -292,7 +293,7 @@ echo "\$@" >> ${curl_calls}
 got_o=false
 for arg in "\$@"; do
   if \$got_o; then
-    mkdir -p /tmp/tunnel-proxy-bin
+    mkdir -p "\$(dirname "\$arg")"
     printf '#!/bin/bash\nexit 0\n' > "\$arg"
     chmod +x "\$arg" 2>/dev/null || true
     exit 0
@@ -320,7 +321,7 @@ echo "\$@" >> ${curl_calls}
 got_o=false
 for arg in "\$@"; do
   if \$got_o; then
-    mkdir -p /tmp/tunnel-proxy-bin
+    mkdir -p "\$(dirname "\$arg")"
     printf '#!/bin/bash\nexit 0\n' > "\$arg"
     chmod +x "\$arg" 2>/dev/null || true
     exit 0

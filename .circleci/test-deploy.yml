@@ -12,7 +12,8 @@ filters: &filters
 smoke_steps: &smoke_steps
   steps:
     - checkout
-    - continuation/setup
+    - continuation/setup:
+        debug: true
     - run:
         name: Verify tunnel connectivity to internal hosts
         shell: bash
@@ -106,7 +107,7 @@ jobs:
   # ── GPU executor (Linux x86_64 + NVIDIA T4) ────────────────────────────────
   gpu-linux-smoke-test:
     machine:
-      image: ubuntu-2204-cuda12:current
+      image: linux-cuda-12:default
     resource_class: gpu.nvidia.small.gen2
     <<: *smoke_steps
 

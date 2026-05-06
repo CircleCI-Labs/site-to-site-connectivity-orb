@@ -23,8 +23,18 @@ esac
 ext=""
 [ "$os" = "windows" ] && ext=".exe"
 
-mkdir -p /tmp/tunnel-proxy-bin
-proxy_bin="/tmp/tunnel-proxy-bin/tunnel-proxy${ext}"
+# On Windows, CircleCI cache resolves /tmp/ to C:\tmp\ in YAML paths.
+# Git Bash maps /tmp/ to a different location, so use /c/tmp/ (C:\tmp\)
+# to keep the binary path consistent with restore_cache / save_cache.
+# WIN_TMP can be overridden in tests where /c/ is not writable.
+WIN_TMP="${WIN_TMP:-/c/tmp}"
+if [ "$os" = "windows" ]; then
+  mkdir -p "${WIN_TMP}/tunnel-proxy-bin"
+  proxy_bin="${WIN_TMP}/tunnel-proxy-bin/tunnel-proxy${ext}"
+else
+  mkdir -p /tmp/tunnel-proxy-bin
+  proxy_bin="/tmp/tunnel-proxy-bin/tunnel-proxy${ext}"
+fi
 proxy_version="${PARAM_TUNNEL_PROXY_VERSION:-latest}"
 
 if [ ! -f "${proxy_bin}" ]; then
@@ -62,7 +72,7 @@ if [ -n "${PARAM_TUNNEL_PROXY_SHA256:-}" ]; then
 fi
 
 # Add tunnel-proxy to PATH for subsequent steps (including SSH ProxyCommand lookups)
-echo "export PATH=\"/tmp/tunnel-proxy-bin:\$PATH\"" >>"$BASH_ENV"
+echo "export PATH=\"$(dirname "${proxy_bin}"):\$PATH\"" >>"$BASH_ENV"
 
 # Start HTTP CONNECT proxy daemon for HTTPS traffic — one --tunnel per vcs mapping
 serve_args=()
@@ -70,7 +80,7 @@ no_proxy=""
 while IFS=$'\t' read -r host domain; do
   serve_args+=("--tunnel" "${host}=tls://${domain}:443")
   echo "  HTTPS tunnel: ${host} -> tls://${domain}:443"
-done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "https") | [.internal_host, .tunnel_domain] | @tsv')
+done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "https") | [.internal_host, .tunnel_domain] | @tsv' | tr -d '\r')
 
 if [ "${#serve_args[@]}" -gt 0 ]; then
   echo "Starting tunnel-proxy serve"
@@ -130,7 +140,7 @@ Host ${host}
   ProxyCommand ${ssh_proxy_bin} connect --tunnel ${host}:22=tls://${ssh_domain}:443 %h:%p
   StrictHostKeyChecking accept-new
 EOF
-done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "ssh") | [.internal_host, .tunnel_domain] | @tsv')
+done < <(echo "$tunnel_details" | jq -r '.tunnels[] | select(.service_type == "ssh") | [.internal_host, .tunnel_domain] | @tsv' | tr -d '\r')
 
 # On Windows, also write env vars into the PowerShell profile so they are
 # available in every subsequent PowerShell step without any user configuration.
@@ -143,7 +153,7 @@ if [ "$os" = "windows" ]; then
   if [ -n "$_ps_profile_win" ]; then
     _ps_profile=$(cygpath "$_ps_profile_win" 2>/dev/null || echo "$_ps_profile_win")
     mkdir -p "$(dirname "$_ps_profile")" 2>/dev/null || true
-    _win_bin=$(cygpath -w /tmp/tunnel-proxy-bin 2>/dev/null || printf '%s' 'C:\tmp\tunnel-proxy-bin')
+    _win_bin=$(cygpath -w "${WIN_TMP}/tunnel-proxy-bin" 2>/dev/null || printf '%s' 'C:\tmp\tunnel-proxy-bin')
     # Escape single quotes for PowerShell string literals (PS doubles them: '' → ')
     _win_bin_ps="${_win_bin//\'/\'\'}"
     _no_proxy_ps="${no_proxy//\'/\'\'}"
