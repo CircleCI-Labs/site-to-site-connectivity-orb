@@ -90,12 +90,39 @@ jobs:
       shell: bash.exe
     <<: *smoke_steps
 
-  # powershell: orb uses shell:bash on each step so no executor-level config needed
+  # powershell: orb setup uses shell:bash internally; this job verifies the
+  # connectivity check itself works from a native PowerShell step.
   windows-powershell-smoke-test:
     machine:
       image: windows-server-2022-gui:current
       resource_class: windows.medium
-    <<: *smoke_steps
+    steps:
+      - checkout
+      - continuation/setup:
+          debug: true
+      - run:
+          name: Verify tunnel connectivity to internal hosts
+          shell: powershell.exe
+          command: |
+            [Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
+            $proxy = if ($env:HTTPS_PROXY) { @{Proxy = $env:HTTPS_PROXY} } else { @{} }
+            $failed = $false
+            foreach ($h in @("api.fieldeng-sphereci.com","backend.fieldeng-sphereci.com","frontend.fieldeng-sphereci.com")) {
+              try {
+                $r = Invoke-WebRequest -Uri "https://$h/" -UseBasicParsing -TimeoutSec 15 @proxy
+                Write-Host "${h}: HTTP $($r.StatusCode)"
+              } catch {
+                $code = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
+                if ($code -gt 0) {
+                  Write-Host "${h}: HTTP $code"
+                } else {
+                  Write-Host "${h}: ERROR - no response"
+                  $failed = $true
+                }
+              }
+            }
+            if ($failed) { exit 1 }
+      - continuation/cleanup
 
   windows-arm-smoke-test:
     machine:
