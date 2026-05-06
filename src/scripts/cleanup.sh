@@ -29,7 +29,7 @@ esac
 if [ "$os" = "windows" ]; then
   taskkill /F /IM tunnel-proxy.exe 2>/dev/null || true
 else
-  pkill -f "tunnel-proxy serve" 2>/dev/null || true
+  pkill tunnel-proxy 2>/dev/null || true
 fi
 
 # On Windows, remove the env var block written to the PowerShell profile by
