@@ -26,7 +26,7 @@ until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do
     -d "{\"ip\":\"${ip}\"}" \
     "https://internal.circleci.com/api/private/site-to-site/ip-policy/register")
   [ "$http_code" -ne 200 ] && echo "  HTTP ${http_code}"
-  if [[ "${DEBUG:-}" == "true" ]]; then
+  if [[ "${DEBUG:-}" == "true" || "${DEBUG:-}" == "1" ]]; then
     echo "  Response body: $(cat "${reg_body}")"
   fi
   rm -f "${reg_body}"
@@ -64,7 +64,7 @@ until [ "$td_http_code" -eq 200 ] || [ "$td_attempt" -ge "$max_attempts" ]; do
     -H "Accept: application/json" \
     "https://internal.circleci.com/api/private/site-to-site/tunnel-details")
   [ "$td_http_code" -ne 200 ] && echo "  HTTP ${td_http_code}"
-  if [[ "${DEBUG:-}" == "true" ]]; then
+  if [[ "${DEBUG:-}" == "true" || "${DEBUG:-}" == "1" ]]; then
     echo "  Response body: $(cat "${td_response}")"
   fi
 

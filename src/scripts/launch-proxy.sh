@@ -50,8 +50,7 @@ else
   echo "Using cached tunnel-proxy at ${proxy_bin}"
 fi
 
-echo "DEBUG: PARAM_VERIFY_CHECKSUM='${PARAM_VERIFY_CHECKSUM:-<unset>}'"
-if [ "${PARAM_VERIFY_CHECKSUM:-true}" = "true" ] || [ "${PARAM_VERIFY_CHECKSUM}" = "1" ]; then
+if [[ "${PARAM_VERIFY_CHECKSUM:-1}" == "true" || "${PARAM_VERIFY_CHECKSUM:-1}" == "1" ]]; then
   echo "Fetching expected SHA256 from GitHub releases API..."
   _asset_name="tunnel-proxy_${os}_${arch}${ext}"
   if [ "$proxy_version" = "latest" ]; then

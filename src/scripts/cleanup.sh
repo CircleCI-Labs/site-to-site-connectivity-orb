@@ -55,7 +55,7 @@ attempt=0
 http_code=0
 until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do
   attempt=$((attempt + 1))
-  if [[ "${DEBUG:-}" == "true" ]]; then
+  if [[ "${DEBUG:-}" == "true" || "${DEBUG:-}" == "1" ]]; then
     echo "DEBUG: IP removal attempt ${attempt}/${max_attempts}"
   fi
   http_code=$(curl -s -o /dev/null -w "%{http_code}" \
