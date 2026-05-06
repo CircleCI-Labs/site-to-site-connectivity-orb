@@ -7,26 +7,28 @@ if [ -z "${CIRCLE_OIDC_TOKEN:-}" ]; then
   exit 1
 fi
 
-# jq is required; on Windows it is not pre-installed so download it automatically
+# jq is required; on Windows x64 it may not be pre-installed so download automatically.
+# On all other platforms the image is expected to provide jq.
 if ! command -v jq &>/dev/null; then
   os_check="$(uname -s | tr '[:upper:]' '[:lower:]')"
   case "$os_check" in
     msys_nt* | msys* | mingw* | cygwin*)
       echo "jq not found, installing..."
       jq_bin="${TMPDIR:-/tmp/}jq.exe"
-      curl -fsSL -o "${jq_bin}" \
+      echo "Downloading jq for windows-amd64..."
+      curl -fsSL --max-time 60 -o "${jq_bin}" \
         "https://github.com/jqlang/jq/releases/latest/download/jq-windows-amd64.exe"
       export PATH="${TMPDIR:-/tmp/}:${PATH}"
       echo "export PATH=\"${TMPDIR:-/tmp/}:\$PATH\"" >>"$BASH_ENV"
       ;;
     *)
-      echo "Error: jq is required but not installed." >&2
+      echo "Error: jq is not installed. Please ensure jq is available in your executor image." >&2
       exit 1
       ;;
   esac
 fi
 
-ip="$(curl --fail https://checkip.amazonaws.com/)"
+ip="$(curl --fail --max-time 10 https://checkip.amazonaws.com/ | tr -d '[:space:]')"
 echo "Registering IP: $ip"
 
 max_attempts="${PARAM_REG_RETRY_ATTEMPTS:-5}"
@@ -35,15 +37,20 @@ attempt=0
 http_code=0
 until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do
   attempt=$((attempt + 1))
-  if [[ "${DEBUG:-}" == "true" ]]; then
-    echo "DEBUG: IP registration attempt ${attempt}/${max_attempts}"
-  fi
-  http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+  echo "IP registration attempt ${attempt}/${max_attempts} (timeout: 30s)..."
+  reg_body=$(mktemp)
+  http_code=$(curl -s -o "${reg_body}" -w "%{http_code}" \
+    --max-time 30 --connect-timeout 10 \
     -H 'Accept: application/json' \
     -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "$(jq -n --arg ip "${ip}" '{"ip":$ip}')" \
+    -d "{\"ip\":\"${ip}\"}" \
     "https://internal.circleci.com/api/private/site-to-site/ip-policy/register")
+  echo "  HTTP ${http_code}"
+  if [[ "${DEBUG:-}" == "true" ]]; then
+    echo "  Response body: $(cat "${reg_body}")"
+  fi
+  rm -f "${reg_body}"
 
   if [ "$http_code" -eq 200 ]; then
     break
@@ -71,13 +78,16 @@ td_attempt=0
 td_http_code=0
 until [ "$td_http_code" -eq 200 ] || [ "$td_attempt" -ge "$max_attempts" ]; do
   td_attempt=$((td_attempt + 1))
-  if [[ "${DEBUG:-}" == "true" ]]; then
-    echo "DEBUG: tunnel-details attempt ${td_attempt}/${max_attempts}"
-  fi
+  echo "Tunnel-details attempt ${td_attempt}/${max_attempts} (timeout: 30s)..."
   td_http_code=$(curl -s -o "${td_response}" -w "%{http_code}" \
+    --max-time 30 --connect-timeout 10 \
     -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
     -H "Accept: application/json" \
     "https://internal.circleci.com/api/private/site-to-site/tunnel-details")
+  echo "  HTTP ${td_http_code}"
+  if [[ "${DEBUG:-}" == "true" ]]; then
+    echo "  Response body: $(cat "${td_response}")"
+  fi
 
   if [ "$td_http_code" -eq 200 ]; then
     break

@@ -59,10 +59,11 @@ until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do
     echo "DEBUG: IP removal attempt ${attempt}/${max_attempts}"
   fi
   http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+    --max-time 30 --connect-timeout 10 \
     -H 'Accept: application/json' \
     -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d "$(jq -n --arg ip "${EXECUTOR_IP}" '{"ip":$ip}')" \
+    -d "{\"ip\":\"${EXECUTOR_IP}\"}" \
     "https://internal.circleci.com/api/private/site-to-site/ip-policy/remove")
 
   if [ "$http_code" -eq 200 ]; then
