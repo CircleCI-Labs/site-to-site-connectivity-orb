@@ -44,4 +44,4 @@ if [ "$os" = "windows" ]; then
   version_file="${WIN_TMP}/.tunnel-proxy-version"
 fi
 echo "${version}-${os}-${arch}" > "$version_file"
-echo "Cache key content: $(cat "$version_file")"
+echo "Cache key content: ${version}-${os}-${arch}"
