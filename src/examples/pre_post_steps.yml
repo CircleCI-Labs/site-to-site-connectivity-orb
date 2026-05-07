@@ -1,0 +1,24 @@
+---
+description: >
+  Use pre-steps and post-steps to wrap a third-party orb job with site-to-site
+  connectivity. This pattern lets you establish the tunnel before the job runs
+  and tear it down after — without modifying the job itself. Ideal when the job
+  comes from another orb or is otherwise not yours to change.
+  post-steps run even when the job fails, so cleanup is always guaranteed.
+
+usage:
+  version: 2.1
+
+  orbs:
+    site-to-site-connectivity: cci-labs/site-to-site-connectivity@1.0.0
+    maven: circleci/maven@1.4
+
+  workflows:
+    build:
+      jobs:
+        - maven/test:
+            context: site-to-site-tunnel
+            pre-steps:
+              - site-to-site-connectivity/setup
+            post-steps:
+              - site-to-site-connectivity/cleanup

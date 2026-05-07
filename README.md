@@ -161,6 +161,30 @@ jobs:
           when: always
 ```
 
+### Wrapping a third-party orb job with pre-steps and post-steps
+
+If a job comes from another orb (or is otherwise not yours to modify), use `pre-steps` and `post-steps` in the workflow to inject tunnel setup and cleanup around it. `post-steps` run even when the job fails, so cleanup is always guaranteed — no `when: always` needed.
+
+```yaml
+version: 2.1
+
+orbs:
+  site-to-site-connectivity: cci-labs/site-to-site-connectivity@1.0.0
+  maven: circleci/maven@1.4
+
+workflows:
+  build:
+    jobs:
+      - maven/test:
+          context: site-to-site-tunnel
+          pre-steps:
+            - site-to-site-connectivity/setup
+          post-steps:
+            - site-to-site-connectivity/cleanup
+```
+
+This works with any orb job — swap `maven/test` for whatever job needs access to private infrastructure.
+
 ### Pin a specific version and disable caching
 
 ```yaml
