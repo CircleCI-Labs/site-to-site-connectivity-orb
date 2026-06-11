@@ -7,7 +7,7 @@ if [ -z "${CIRCLE_OIDC_TOKEN:-}" ]; then
   exit 1
 fi
 
-ip="$(curl --fail https://checkip.amazonaws.com/)"
+ip="$(curl -s --fail --max-time 10 https://checkip.amazonaws.com/ | tr -d '[:space:]')"
 echo "Registering IP: $ip"
 
 max_attempts="${PARAM_REG_RETRY_ATTEMPTS:-5}"
@@ -16,15 +16,20 @@ attempt=0
 http_code=0
 until [ "$http_code" -eq 200 ] || [ "$attempt" -ge "$max_attempts" ]; do
   attempt=$((attempt + 1))
-  if [[ "${DEBUG:-}" == "true" ]]; then
-    echo "DEBUG: IP registration attempt ${attempt}/${max_attempts}"
-  fi
-  http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+  [ "$attempt" -gt 1 ] && echo "IP registration attempt ${attempt}/${max_attempts} (timeout: 30s)..."
+  reg_body=$(mktemp)
+  http_code=$(curl -s -o "${reg_body}" -w "%{http_code}" \
+    --max-time 30 --connect-timeout 10 \
     -H 'Accept: application/json' \
     -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
     -H "Content-Type: application/json" \
-    -d '{"ip":"'"${ip}"'"}' \
+    -d "{\"ip\":\"${ip}\"}" \
     "https://internal.circleci.com/api/private/site-to-site/ip-policy/register")
+  [ "$http_code" -ne 200 ] && echo "  HTTP ${http_code}"
+  if [[ "${DEBUG:-}" == "true" || "${DEBUG:-}" == "1" ]]; then
+    echo "  Response body: $(cat "${reg_body}")"
+  fi
+  rm -f "${reg_body}"
 
   if [ "$http_code" -eq 200 ]; then
     break
@@ -52,13 +57,16 @@ td_attempt=0
 td_http_code=0
 until [ "$td_http_code" -eq 200 ] || [ "$td_attempt" -ge "$max_attempts" ]; do
   td_attempt=$((td_attempt + 1))
-  if [[ "${DEBUG:-}" == "true" ]]; then
-    echo "DEBUG: tunnel-details attempt ${td_attempt}/${max_attempts}"
-  fi
+  [ "$td_attempt" -gt 1 ] && echo "Tunnel-details attempt ${td_attempt}/${max_attempts} (timeout: 30s)..."
   td_http_code=$(curl -s -o "${td_response}" -w "%{http_code}" \
+    --max-time 30 --connect-timeout 10 \
     -H "Authorization: Bearer ${CIRCLE_OIDC_TOKEN}" \
     -H "Accept: application/json" \
     "https://internal.circleci.com/api/private/site-to-site/tunnel-details")
+  [ "$td_http_code" -ne 200 ] && echo "  HTTP ${td_http_code}"
+  if [[ "${DEBUG:-}" == "true" || "${DEBUG:-}" == "1" ]]; then
+    echo "  Response body: $(cat "${td_response}")"
+  fi
 
   if [ "$td_http_code" -eq 200 ]; then
     break

@@ -1,19 +1,31 @@
 ---
 description: >
-  Example workflow demonstrating how to use the site to site connectivity
-  orb to access private repositories via CircleCI tunnel. After setup, use
+  Example workflows demonstrating how to use the site to site connectivity
+  orb on Linux (Docker) and Windows (machine) executors. After setup, use
   the built-in checkout step — SSH is routed through tunnel-proxy automatically.
 
 usage:
   version: 2.1
 
   orbs:
-    site-to-site-connectivity: your-namespace/site-to-site-connectivity@0.0.1
+    site-to-site-connectivity: cci-labs/site-to-site-connectivity@1.0.0
 
   jobs:
-    build-with-private-repo:
+    build-with-private-repo-linux:
       docker:
         - image: cimg/base:current
+      steps:
+        - site-to-site-connectivity/setup
+        - checkout
+        - run:
+            name: Build application
+            command: |
+              echo "Building application..."
+        - site-to-site-connectivity/cleanup:
+            when: always
+
+    build-with-private-repo-windows:
+      executor: site-to-site-connectivity/windows
       steps:
         - site-to-site-connectivity/setup
         - checkout
@@ -27,6 +39,9 @@ usage:
   workflows:
     private-repo-workflow:
       jobs:
-        - build-with-private-repo:
+        - build-with-private-repo-linux:
+            context:
+              - site-to-site-tunnel
+        - build-with-private-repo-windows:
             context:
               - site-to-site-tunnel

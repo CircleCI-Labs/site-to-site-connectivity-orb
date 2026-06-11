@@ -16,8 +16,10 @@ setup() {
   export CIRCLE_OIDC_TOKEN="test-oidc-token"
   export PARAM_REG_RETRY_ATTEMPTS=1
   export PARAM_REG_RETRY_DELAY=0
+  export WIN_TMP="$TEST_TMP/c_tmp"
   unset DEBUG
   unset PARAM_TUNNEL_PROXY_VERSION
+  export PARAM_VERIFY_CHECKSUM=false
 
   write_curl_mock "$MOCK_SINGLE_TUNNEL"
 }
@@ -25,6 +27,8 @@ setup() {
 teardown() {
   lsof -ti tcp:4140 2>/dev/null | xargs kill 2>/dev/null || true
   rm -rf "$TEST_TMP"
+  rm -rf /tmp/tunnel-proxy-bin
+  rm -f /tmp/.tunnel-proxy-version
 }
 
 @test "register fails when CIRCLE_OIDC_TOKEN is unset" {
@@ -95,6 +99,7 @@ echo "\$@" >> ${curl_calls}
 got_o=false
 for arg in "\$@"; do
   if \$got_o; then
+    mkdir -p /tmp/tunnel-proxy-bin
     printf '#!/bin/bash\nexit 0\n' > "\$arg"
     chmod +x "\$arg" 2>/dev/null || true
     exit 0
@@ -146,6 +151,7 @@ fi
 got_o=false
 for arg in "\$@"; do
   if \$got_o; then
+    mkdir -p /tmp/tunnel-proxy-bin
     printf '#!/bin/bash\nexit 0\n' > "\$arg"
     chmod +x "\$arg" 2>/dev/null || true
     exit 0
@@ -218,4 +224,259 @@ CURLEOF
   run bash src/scripts/launch-proxy.sh
   [ "$status" -ne 0 ]
   [[ "$output" == *"did not bind to port 4140"* ]]
+}
+
+@test "launch-proxy skips download when binary already exists (cache hit)" {
+  # Pre-write tunnel details and pre-create the binary to simulate a cache hit
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  mkdir -p /tmp/tunnel-proxy-bin
+  printf '#!/bin/bash\nexit 0\n' > /tmp/tunnel-proxy-bin/tunnel-proxy
+  chmod +x /tmp/tunnel-proxy-bin/tunnel-proxy
+
+  local curl_calls="$TEST_TMP/curl_calls"
+  cat > "$MOCK_BIN/curl" <<CURLEOF
+#!/bin/bash
+echo "\$@" >> ${curl_calls}
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Using cached tunnel-proxy"* ]]
+  ! grep -q "CircleCI-Labs/site-to-site-tunnel-proxy" "$curl_calls"
+}
+
+# resolve-version.sh tests
+
+@test "resolve-version writes pinned version to checksum file" {
+  export PARAM_TUNNEL_PROXY_VERSION="v0.0.3"
+  run bash src/scripts/resolve-version.sh
+  [ "$status" -eq 0 ]
+  [ -f "/tmp/.tunnel-proxy-version" ]
+  [[ "$(cat /tmp/.tunnel-proxy-version)" == v0.0.3-* ]]
+  [[ "$output" == *"v0.0.3"* ]]
+}
+
+@test "resolve-version resolves 'latest' via GitHub API" {
+  # write_curl_mock (from setup) handles api.github.com and returns tag_name v0.0.3
+  run bash src/scripts/resolve-version.sh
+  [ "$status" -eq 0 ]
+  [ -f "/tmp/.tunnel-proxy-version" ]
+  [[ "$(cat /tmp/.tunnel-proxy-version)" == v0.0.3-* ]]
+  [[ "$output" == *"Resolved to: v0.0.3"* ]]
+}
+
+@test "resolve-version includes OS and arch in checksum file" {
+  export PARAM_TUNNEL_PROXY_VERSION="v0.0.3"
+  run bash src/scripts/resolve-version.sh
+  [ "$status" -eq 0 ]
+  # Version file must have format: version-os-arch (three hyphen-separated segments)
+  local content
+  content="$(cat /tmp/.tunnel-proxy-version)"
+  [[ "$content" =~ ^[^-]+-[^-]+-[^-]+$ ]]
+}
+
+# Windows-specific tests
+# These mock uname to return MSYS_NT-10.0-20348, matching the actual CircleCI Windows Server 2022 executor.
+# tunnel_details.json is pre-written directly (launch-proxy.sh reads it; register.sh writes it).
+
+@test "launch-proxy uses 'windows' in download URL" {
+  local curl_calls="$TEST_TMP/curl_calls"
+  write_windows_uname_mock
+  mock_cmd cygpath 0 "C:/tmp/tunnel-proxy-bin/tunnel-proxy.exe"
+  # SSH-only tunnel: no HTTPS proxy daemon started, so no liveness check needed
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+
+  cat > "$MOCK_BIN/curl" <<CURLEOF
+#!/bin/bash
+echo "\$@" >> ${curl_calls}
+got_o=false
+for arg in "\$@"; do
+  if \$got_o; then
+    mkdir -p "\$(dirname "\$arg")"
+    printf '#!/bin/bash\nexit 0\n' > "\$arg"
+    chmod +x "\$arg" 2>/dev/null || true
+    exit 0
+  fi
+  [[ "\$arg" == "-o" ]] && got_o=true
+done
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  grep -q "tunnel-proxy_windows_amd64" "$curl_calls"
+}
+
+@test "launch-proxy appends .exe to binary name on Windows" {
+  local curl_calls="$TEST_TMP/curl_calls"
+  write_windows_uname_mock
+  mock_cmd cygpath 0 "C:/tmp/tunnel-proxy-bin/tunnel-proxy.exe"
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+
+  cat > "$MOCK_BIN/curl" <<CURLEOF
+#!/bin/bash
+echo "\$@" >> ${curl_calls}
+got_o=false
+for arg in "\$@"; do
+  if \$got_o; then
+    mkdir -p "\$(dirname "\$arg")"
+    printf '#!/bin/bash\nexit 0\n' > "\$arg"
+    chmod +x "\$arg" 2>/dev/null || true
+    exit 0
+  fi
+  [[ "\$arg" == "-o" ]] && got_o=true
+done
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  grep -q "tunnel-proxy_windows_amd64.exe" "$curl_calls"
+}
+
+@test "launch-proxy skips nohup on Windows and still starts daemon" {
+  write_windows_uname_mock
+  mock_cmd cygpath 0 "C:/tmp/tunnel-proxy-bin/tunnel-proxy.exe"
+  echo "$MOCK_SINGLE_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  write_curl_mock "$MOCK_SINGLE_TUNNEL"
+
+  local nohup_called="$TEST_TMP/nohup_called"
+  cat > "$MOCK_BIN/nohup" <<NOHUPEOF
+#!/bin/bash
+touch "${nohup_called}"
+exec "\$@"
+NOHUPEOF
+  chmod +x "$MOCK_BIN/nohup"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  [ ! -f "$nohup_called" ]
+  grep -q 'HTTPS_PROXY' "$BASH_ENV"
+}
+
+@test "launch-proxy uses cygpath-converted path in SSH ProxyCommand on Windows" {
+  write_windows_uname_mock
+  mock_cmd cygpath 0 "C:/tmp/tunnel-proxy-bin/tunnel-proxy.exe"
+  echo "$MOCK_SINGLE_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  write_curl_mock "$MOCK_SINGLE_TUNNEL"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  grep -qF "C:/tmp/tunnel-proxy-bin/tunnel-proxy.exe" "$HOME/.ssh/config"
+}
+
+@test "launch-proxy writes tunnel env to PowerShell profile on Windows" {
+  local ps_profile="$TEST_TMP/ps_profile.ps1"
+  write_windows_uname_mock
+  write_powershell_mock "$ps_profile"
+  echo "$MOCK_SINGLE_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  write_curl_mock "$MOCK_SINGLE_TUNNEL"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  [ -f "$ps_profile" ]
+  grep -q 'HTTPS_PROXY' "$ps_profile"
+  grep -q 'NO_PROXY' "$ps_profile"
+  grep -q 'tunnel-proxy-bin' "$ps_profile"
+  grep -q 'BEGIN site-to-site-orb' "$ps_profile"
+}
+
+@test "launch-proxy writes PATH but not HTTPS_PROXY to PowerShell profile on SSH-only tunnel" {
+  local ps_profile="$TEST_TMP/ps_profile.ps1"
+  write_windows_uname_mock
+  write_powershell_mock "$ps_profile"
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  write_curl_mock "$MOCK_SSH_ONLY_TUNNEL"
+
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  [ -f "$ps_profile" ]
+  grep -q 'tunnel-proxy-bin' "$ps_profile"
+  ! grep -q 'HTTPS_PROXY' "$ps_profile"
+}
+
+@test "launch-proxy verifies SHA256 against GitHub releases API digest" {
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  mkdir -p /tmp/tunnel-proxy-bin
+  printf '#!/bin/bash\nexit 0\n' > /tmp/tunnel-proxy-bin/tunnel-proxy
+  chmod +x /tmp/tunnel-proxy-bin/tunnel-proxy
+
+  local sha
+  if command -v sha256sum &>/dev/null; then
+    sha=$(sha256sum /tmp/tunnel-proxy-bin/tunnel-proxy | awk '{print $1}')
+  else
+    sha=$(shasum -a 256 /tmp/tunnel-proxy-bin/tunnel-proxy | awk '{print $1}')
+  fi
+
+  # Override curl mock so the GitHub API returns the correct digest for all platforms
+  cat > "$MOCK_BIN/curl" <<CURLEOF
+#!/bin/bash
+if [[ "\$*" == *"api.github.com"* ]]; then
+  echo '{"tag_name":"v0.0.3","assets":[{"name":"tunnel-proxy_linux_amd64","digest":"sha256:${sha}"},{"name":"tunnel-proxy_linux_arm64","digest":"sha256:${sha}"},{"name":"tunnel-proxy_darwin_amd64","digest":"sha256:${sha}"},{"name":"tunnel-proxy_darwin_arm64","digest":"sha256:${sha}"},{"name":"tunnel-proxy_windows_amd64.exe","digest":"sha256:${sha}"}]}'
+  exit 0
+fi
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  export PARAM_VERIFY_CHECKSUM=true
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"SHA256 verified"* ]]
+}
+
+@test "launch-proxy fails when binary SHA256 does not match GitHub release digest" {
+  echo "$MOCK_SSH_ONLY_TUNNEL" > "$TEST_TMP/tunnel_details.json"
+  mkdir -p /tmp/tunnel-proxy-bin
+  printf '#!/bin/bash\nexit 0\n' > /tmp/tunnel-proxy-bin/tunnel-proxy
+  chmod +x /tmp/tunnel-proxy-bin/tunnel-proxy
+
+  cat > "$MOCK_BIN/curl" <<'CURLEOF'
+#!/bin/bash
+if [[ "$*" == *"api.github.com"* ]]; then
+  echo '{"tag_name":"v0.0.3","assets":[{"name":"tunnel-proxy_linux_amd64","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},{"name":"tunnel-proxy_linux_arm64","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},{"name":"tunnel-proxy_darwin_amd64","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},{"name":"tunnel-proxy_darwin_arm64","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},{"name":"tunnel-proxy_windows_amd64.exe","digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}]}'
+  exit 0
+fi
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  export PARAM_VERIFY_CHECKSUM=true
+  run bash src/scripts/launch-proxy.sh
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SHA256 mismatch"* ]]
+}
+
+@test "cleanup removes PowerShell profile entries on Windows" {
+  local ps_profile="$TEST_TMP/ps_profile.ps1"
+  cat > "$ps_profile" <<'PS1EOF'
+# some existing content
+# BEGIN site-to-site-orb
+$env:HTTPS_PROXY = 'http://127.0.0.1:4140'
+# END site-to-site-orb
+PS1EOF
+
+  write_windows_uname_mock
+  write_powershell_mock "$ps_profile"
+  mock_cmd taskkill 0 ""
+
+  export CIRCLE_OIDC_TOKEN="test-token"
+  export EXECUTOR_IP="1.2.3.4"
+
+  cat > "$MOCK_BIN/curl" <<'CURLEOF'
+#!/bin/bash
+if [[ "$*" == *"ip-policy/remove"* ]]; then echo "200"; fi
+exit 0
+CURLEOF
+  chmod +x "$MOCK_BIN/curl"
+
+  run bash src/scripts/cleanup.sh
+  [ "$status" -eq 0 ]
+  grep -q 'some existing content' "$ps_profile"
+  ! grep -q 'HTTPS_PROXY' "$ps_profile"
+  ! grep -q 'BEGIN site-to-site-orb' "$ps_profile"
 }

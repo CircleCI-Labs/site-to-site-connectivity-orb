@@ -2,7 +2,7 @@
 
 [![CircleCI Build Status](https://circleci.com/gh/CircleCI-Labs/site-to-site-connectivity-orb.svg?style=shield "CircleCI Build Status")](https://circleci.com/gh/CircleCI-Labs/site-to-site-connectivity-orb) [![CircleCI Orb Version](https://badges.circleci.com/orbs/cci-labs/site-to-site-connectivity.svg)](https://circleci.com/developer/orbs/orb/cci-labs/site-to-site-connectivity) [![GitHub License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](https://raw.githubusercontent.com/CircleCI-Labs/site-to-site-connectivity-orb/master/LICENSE) [![CircleCI Community](https://img.shields.io/badge/community-CircleCI%20Discuss-343434.svg)](https://discuss.circleci.com/c/ecosystem/orbs)
 
-A CircleCI orb for establishing site to site connectivity via CircleCI tunnels to enable secure access to private repositories and resources during builds.
+A CircleCI orb for establishing site-to-site connectivity via CircleCI tunnels, enabling secure access to private repositories and resources during builds.
 
 ### Disclaimer
 
@@ -16,47 +16,74 @@ CircleCI Labs, including this repo, is a collection of solutions developed by me
 
 This orb:
 
-1. Sets up CircleCI tunnels with IP rules for secure access
-2. Configures HTTPS and SSH routing transparently for subsequent steps
-3. Deregisters the executor IP on cleanup
+1. Registers the executor's public IP with the CircleCI tunnel allowlist
+2. Downloads and starts `tunnel-proxy`, caching the binary between jobs
+3. Configures `HTTPS_PROXY` and SSH `ProxyCommand` so subsequent steps reach private infrastructure transparently — including the built-in `checkout` step
+4. Deregisters the executor IP on cleanup
+
+**Supported executors:**
+
+| Executor | Image / Config | Architecture | Notes |
+|---|---|---|---|
+| Docker | `cimg/base:current` (or any image) | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
+| Linux machine | `ubuntu-2204:current` | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
+| macOS | `xcode: 16.x`, `macos.m1.medium.gen1` | arm64 (M1/M2) | |
+| Windows (bash.exe) | `windows-server-2022-gui:current` | amd64 | `shell: bash.exe` optional at executor level |
+| Windows (PowerShell) | `windows-server-2022-gui:current` | amd64 | Works — orb forces `shell: bash` per-step |
+| Windows ARM | `windows-11-arm:current` | arm64 | ⚠️ Experimental — supported but untested. Use with caution. |
+| GPU (Linux) | `ubuntu-2204-cuda12:current` | amd64 | Treated as a standard Linux machine |
+
+All orb `run` steps explicitly use `shell: bash`, so the orb works regardless of the executor's default shell. On Windows, bash resolves to Git Bash (pre-installed on all CircleCI Windows images). You do **not** need to set `shell: bash.exe` at the executor level, though doing so is harmless.
+
+> **PowerShell steps work automatically.** On Windows, the orb appends `$env:HTTPS_PROXY`, `$env:NO_PROXY`, and `$env:PATH` to `$PROFILE.AllUsersCurrentHost`, which PowerShell sources before every step. `cleanup` removes those entries. No manual configuration required.
 
 ## Commands
 
 ### `setup`
 
-Registers the executor IP, discovers tunnel endpoints, downloads `tunnel-proxy`, and configures both HTTPS and SSH routing.
+Registers the executor IP, fetches tunnel configuration, downloads `tunnel-proxy`, starts the proxy daemon, and configures HTTPS and SSH routing.
 
 **Parameters:**
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `tunnel-proxy-version` | string | `latest` | Version of `tunnel-proxy` to download (e.g. `v1.2.3`) |
-| `registration-retry-attempts` | integer | `5` | Max retry attempts for IP registration and tunnel-details on 500 errors |
+| `tunnel-proxy-version` | string | `latest` | Version of `tunnel-proxy` to use (e.g. `v0.0.3`). `latest` resolves at job start via the GitHub API. Pin to a specific version for fully reproducible builds. |
+| `cache-version` | string | `v1` | Cache key prefix. Increment (e.g. `v2`) to force a fresh download and discard any previously cached binary. |
+| `cache` | boolean | `true` | Cache the `tunnel-proxy` binary between jobs. Set to `false` to always download a fresh copy. |
+| `registration-retry-attempts` | integer | `5` | Max retry attempts for IP registration and tunnel lookup on 500 errors |
 | `registration-retry-delay` | integer | `30` | Seconds between retry attempts |
 | `no-proxy` | string | `""` | Additional comma-separated hosts to exclude from the HTTPS proxy |
-| `debug` | boolean | `false` | Enable debug logging |
+| `verify-tunnel` | boolean | `true` | Verify each tunnel is reachable before the step completes |
+| `verify-tunnel-attempts` | integer | `5` | Number of connection attempts per tunnel during verification |
+| `debug` | boolean | `false` | Enable verbose debug logging. When `true`, a log-dump step is appended that prints `tunnel-proxy.log` whenever a previous step fails — making tunnel startup failures immediately visible without manual log inspection. |
+| `verify-checksum` | boolean | `true` | Verify the `tunnel-proxy` binary against the SHA256 digest published in the GitHub release. The digest is fetched automatically from the GitHub API — no manual hash lookup required. Set to `false` to skip. |
 
-**Exports to subsequent steps:**
+**Exports to subsequent steps via `$BASH_ENV`:**
 
 | Variable | Value |
 |----------|-------|
-| `EXECUTOR_IP` | The executor's public IP (used by `cleanup`) |
-| `HTTPS_PROXY` | `http://127.0.0.1:4140` — set when at least one `vcs` tunnel exists |
-| `NO_PROXY` | `localhost,127.0.0.1,circleci.com,*.circleci.com` — set alongside `HTTPS_PROXY` |
+| `EXECUTOR_IP` | The executor's public IP (required by `cleanup`) |
+| `HTTPS_PROXY` | `http://127.0.0.1:4140` — set when at least one `https` tunnel exists |
+| `NO_PROXY` | `localhost,127.0.0.1,circleci.com,*.circleci.com[,<no-proxy>]` — set alongside `HTTPS_PROXY` |
+| `PATH` | Prepended with `/tmp/tunnel-proxy-bin` so `tunnel-proxy` is available in subsequent steps |
 
-**SSH config:** An `~/.ssh/config` `Host` entry with a `ProxyCommand` is written for each `vcs-ssh` tunnel, so the built-in `checkout` step works without additional configuration.
+**SSH config:** An `~/.ssh/config` entry with a `ProxyCommand` is written for each `ssh` tunnel, so `git clone` and the built-in `checkout` step work without additional configuration.
 
 ### `cleanup`
 
-Deregisters the executor IP from the site-to-site allowlist. Run with `when: always` to ensure it executes even if earlier steps fail.
+Deregisters the executor IP from the site-to-site allowlist and stops the `tunnel-proxy` daemon.
+
+Always run with `when: always` so cleanup executes even when earlier steps fail.
 
 **Parameters:**
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `debug` | boolean | `false` | Enable debug logging |
+| `debug` | boolean | `false` | Enable verbose debug logging |
 
 ## Example Usage
+
+### Docker / Linux machine
 
 ```yaml
 version: 2.1
@@ -81,9 +108,122 @@ workflows:
   main:
     jobs:
       - build:
-          context:
-            - site-to-site-tunnel
+          context: site-to-site-tunnel
 ```
+
+### Windows machine executor
+
+The orb works with the default PowerShell executor — no `shell: bash.exe` required at the executor level. You may still set it if all your own steps also need bash.
+
+```yaml
+version: 2.1
+
+orbs:
+  site-to-site-connectivity: cci-labs/site-to-site-connectivity@1.0.0
+
+jobs:
+  build:
+    machine:
+      image: windows-server-2022-gui:current
+      resource_class: windows.medium
+      # shell: bash.exe is optional — the orb works with the default PowerShell shell
+    steps:
+      - site-to-site-connectivity/setup
+      - checkout
+      - run:
+          name: Build
+          command: make build
+      - site-to-site-connectivity/cleanup:
+          when: always
+
+workflows:
+  main:
+    jobs:
+      - build:
+          context: site-to-site-tunnel
+```
+
+### GPU (Linux) executor
+
+No special configuration required — the GPU executor is treated as a standard Linux machine:
+
+```yaml
+jobs:
+  build:
+    machine:
+      image: ubuntu-2204-cuda12:current
+    resource_class: gpu.nvidia.small.gen2
+    steps:
+      - site-to-site-connectivity/setup
+      - checkout
+      - run: python train.py
+      - site-to-site-connectivity/cleanup:
+          when: always
+```
+
+### Wrapping a third-party orb job with pre-steps and post-steps
+
+If a job comes from another orb (or is otherwise not yours to modify), use `pre-steps` and `post-steps` in the workflow to inject tunnel setup and cleanup around it. `post-steps` run even when the job fails, so cleanup is always guaranteed — no `when: always` needed.
+
+```yaml
+version: 2.1
+
+orbs:
+  site-to-site-connectivity: cci-labs/site-to-site-connectivity@1.0.0
+  maven: circleci/maven@1.4
+
+workflows:
+  build:
+    jobs:
+      - maven/test:
+          context: site-to-site-tunnel
+          pre-steps:
+            - site-to-site-connectivity/setup
+          post-steps:
+            - site-to-site-connectivity/cleanup
+```
+
+This works with any orb job — swap `maven/test` for whatever job needs access to private infrastructure.
+
+### Pin a specific version and disable caching
+
+```yaml
+- site-to-site-connectivity/setup:
+    tunnel-proxy-version: v0.0.3
+    cache: false
+```
+
+### Binary checksum verification
+
+By default (`verify-checksum: true`), `setup` fetches the SHA256 digest for the platform-specific binary directly from the GitHub releases API and verifies the downloaded binary against it. No manual hash lookup required. The verification runs whether the binary was just downloaded or restored from cache.
+
+To skip verification:
+
+```yaml
+- site-to-site-connectivity/setup:
+    verify-checksum: false
+```
+
+### Bust the cache after a forced upgrade
+
+```yaml
+- site-to-site-connectivity/setup:
+    cache-version: v2
+```
+
+## Caching
+
+`setup` caches the `tunnel-proxy` binary in `/tmp/tunnel-proxy-bin` using a cache key derived from the resolved version and the executor's OS and architecture:
+
+```
+<cache-version>-tunnel-proxy-{{ checksum "/tmp/.tunnel-proxy-version" }}
+```
+
+Linux and Windows jobs get separate cache entries automatically because the checksum file includes the OS and architecture (e.g. `v0.0.3-linux-amd64` vs `v0.0.3-windows-amd64`).
+
+On a cache hit, the download is skipped entirely. On a cache miss, the binary is downloaded and cached for subsequent jobs.
+
+**Using `latest` with caching:** When `tunnel-proxy-version: latest` (the default), `setup` always makes one GitHub API call per job to resolve the current release tag. That resolved tag then determines the cache key. Same release = cache hit; new release = automatic cache miss and fresh download. This means `latest` stays up-to-date automatically without any manual intervention.
 
 ## Resources
 

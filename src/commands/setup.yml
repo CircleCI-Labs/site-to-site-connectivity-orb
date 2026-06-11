@@ -2,13 +2,25 @@
 description: >
   Setup CircleCI tunnel for site to site connectivity. Configures HTTPS_PROXY
   and SSH ProxyCommand so subsequent steps (including the built-in checkout)
-  can reach private infrastructure through the tunnel.
+  can reach private infrastructure through the tunnel. Supports Linux, macOS,
+  Windows (bash.exe or PowerShell default), Docker, and GPU executors.
+  All run steps use shell: bash explicitly, so no executor-level shell
+  configuration is required.
 
 parameters:
   tunnel-proxy-version:
     type: string
-    description: "Version of tunnel-proxy to download"
+    description: >
+      Version of tunnel-proxy to download (e.g. "v0.0.3"). Defaults to
+      "latest" which resolves to the current GitHub release at job start.
+      Pin to a specific version for fully reproducible builds.
     default: "latest"
+  cache-version:
+    type: string
+    description: >
+      Cache key prefix for the tunnel-proxy binary. Increment (e.g. "v2")
+      to force a fresh download and discard any previously cached binary.
+    default: "v1"
   registration-retry-attempts:
     type: integer
     description: "Number of retry attempts for IP registration on 500 errors"
@@ -29,38 +41,89 @@ parameters:
     type: integer
     description: "Number of attempts to verify each tunnel is reachable"
     default: 5
+  cache:
+    type: boolean
+    description: >
+      Cache the tunnel-proxy binary between jobs. Set to false to always
+      download a fresh binary (useful when debugging download issues).
+    default: true
   debug:
     type: boolean
     description: "Enable debug mode"
     default: false
+  verify-checksum:
+    type: boolean
+    description: >
+      Verify the tunnel-proxy binary against the SHA256 digest published in the
+      GitHub release. The digest is fetched automatically from the GitHub API —
+      no manual hash lookup required. Set to false to skip verification.
+    default: true
 
 steps:
   - run:
+      name: Check required tools
+      shell: bash
+      command: <<include(scripts/preflight.sh)>>
+  - run:
       name: Authorize tunnel and fetch configuration
+      shell: bash
       environment:
         PARAM_REG_RETRY_ATTEMPTS: << parameters.registration-retry-attempts >>
         PARAM_REG_RETRY_DELAY: << parameters.registration-retry-delay >>
         DEBUG: << parameters.debug >>
       command: <<include(scripts/register.sh)>>
   - run:
+      name: Resolve tunnel-proxy version
+      shell: bash
+      environment:
+        PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
+      command: <<include(scripts/resolve-version.sh)>>
+  - when:
+      condition: << parameters.cache >>
+      steps:
+        - restore_cache:
+            keys:
+              # yamllint disable-line rule:line-length
+              - << parameters.cache-version >>-tunnel-proxy-{{ checksum "/tmp/.tunnel-proxy-version" }}
+  - run:
       name: Launch tunnel proxy
+      shell: bash
       environment:
         PARAM_TUNNEL_PROXY_VERSION: << parameters.tunnel-proxy-version >>
         PARAM_NO_PROXY: << parameters.no-proxy >>
+        PARAM_VERIFY_CHECKSUM: << parameters.verify-checksum >>
         DEBUG: << parameters.debug >>
       command: <<include(scripts/launch-proxy.sh)>>
+  - when:
+      condition: << parameters.cache >>
+      steps:
+        - save_cache:
+            # yamllint disable-line rule:line-length
+            key: << parameters.cache-version >>-tunnel-proxy-{{ checksum "/tmp/.tunnel-proxy-version" }}
+            paths:
+              - /tmp/tunnel-proxy-bin
   - run:
       name: tunnel-proxy logs
+      shell: bash
       background: true
-      command: |
-        touch /tmp/tunnel-proxy.log
-        tail -f /tmp/tunnel-proxy.log
+      command: <<include(scripts/tail-logs.sh)>>
   - when:
       condition: << parameters.verify-tunnel >>
       steps:
         - run:
             name: Verify tunnel connectivity
+            shell: bash
             environment:
               PARAM_VERIFY_ATTEMPTS: << parameters.verify-tunnel-attempts >>
               DEBUG: << parameters.debug >>
             command: <<include(scripts/verify-tunnel.sh)>>
+  - when:
+      condition: << parameters.debug >>
+      steps:
+        - run:
+            name: Dump tunnel-proxy logs
+            shell: bash
+            when: on_fail
+            command: |
+              echo "=== tunnel-proxy.log ==="
+              cat "${TMPDIR:-/tmp}/tunnel-proxy.log" || true

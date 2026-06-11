@@ -23,9 +23,14 @@ if [[ "\$*" == *"tunnel-details"* ]]; then
   echo "200"
   exit 0
 fi
+if [[ "\$*" == *"api.github.com"* ]]; then
+  echo '{"tag_name":"v0.0.3","name":"v0.0.3"}'
+  exit 0
+fi
 got_o=false
 for arg in "\$@"; do
   if \$got_o; then
+    mkdir -p "\$(dirname "\$arg")"
     cp "${stub_file}" "\$arg"
     chmod +x "\$arg" 2>/dev/null || true
     exit 0
@@ -39,7 +44,7 @@ CURLEOF
 
 # write_curl_mock <tunnel_json>
 # Creates a curl mock backed by a tunnel-proxy stub that binds to port 4140
-# on 'serve' (satisfying both the kill -0 liveness check and nc -z port check).
+# on 'serve' (satisfying both the kill -0 liveness check and /dev/tcp port check).
 write_curl_mock() {
   local tunnel_json="$1"
   local stub_file="$MOCK_BIN/tunnel-proxy-stub"
@@ -73,6 +78,65 @@ echo '$out'
 exit $code
 EOF
   chmod +x "$MOCK_BIN/$name"
+}
+
+# Write a uname mock that simulates Windows Git Bash environment.
+# uname -s returns MSYS_NT-10.0-20348 (actual value from CircleCI Windows Server 2022 executor).
+write_windows_uname_mock() {
+  cat > "$MOCK_BIN/uname" <<'EOF'
+#!/bin/bash
+case "$1" in
+  -s) echo "MSYS_NT-10.0-20348" ;;
+  -m) echo "x86_64" ;;
+  *)  echo "MSYS_NT-10.0-20348" ;;
+esac
+EOF
+  chmod +x "$MOCK_BIN/uname"
+}
+
+# write_powershell_mock <profile_path>
+# Mocks powershell.exe: handles -File <script> by simulating Add-Content calls
+# (writing profile content), and AllUsersCurrentHost queries (returning the path).
+# Also mocks cygpath (handles -w unix→windows and plain windows→unix conversions).
+write_powershell_mock() {
+  local ps_profile="$1"
+  cat > "$MOCK_BIN/powershell.exe" <<EOF
+#!/bin/bash
+if [[ "\$*" == *"-File"* ]]; then
+  prev=""
+  script_win=""
+  for a in "\$@"; do
+    [[ "\$prev" == "-File" ]] && { script_win="\$a"; break; }
+    prev="\$a"
+  done
+  # Convert Windows path (C:\foo\bar) to unix (/foo/bar)
+  script_unix="\$(echo "\$script_win" | sed 's|^[A-Za-z]:||; s|\\\\\\\\|/|g; s|\\\\|/|g')"
+  if [[ -f "\$script_unix" ]]; then
+    mkdir -p "\$(dirname "${ps_profile}")"
+    touch "${ps_profile}"
+    # Simulate Add-Content: extract content from '"text" | Add-Content ...' lines
+    sed -n 's/^"\\(.*\\)" | Add-Content.*/\\1/p' "\$script_unix" >> "${ps_profile}"
+  fi
+  exit 0
+fi
+if [[ "\$*" == *"AllUsersCurrentHost"* ]]; then echo "${ps_profile}"; exit 0; fi
+exit 0
+EOF
+  chmod +x "$MOCK_BIN/powershell.exe"
+
+  cat > "$MOCK_BIN/cygpath" <<EOF
+#!/bin/bash
+if [[ "\$1" == "-w" ]]; then
+  case "\${2:-}" in
+    */tunnel-proxy-bin/tunnel-proxy*) echo "C:/tmp/tunnel-proxy-bin/\$(basename "\${2}")" ;;
+    */tunnel-proxy-bin)               echo 'C:\\tmp\\tunnel-proxy-bin' ;;
+    *)                                printf 'C:\\\\%s' "\$(echo "\${2}" | tr '/' '\\\\')" ;;
+  esac
+else
+  echo "${ps_profile}"
+fi
+EOF
+  chmod +x "$MOCK_BIN/cygpath"
 }
 
 # Single-tunnel response: one internal host, both vcs and vcs-ssh

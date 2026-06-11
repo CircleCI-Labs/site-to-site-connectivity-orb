@@ -7,29 +7,199 @@ filters: &filters
   tags:
     only: /.*/
 
+# Shared steps for every smoke test: setup, connectivity checks, cleanup.
+# All smoke tests require context: site-to-site-tunnel.
+smoke_steps: &smoke_steps
+  steps:
+    - checkout
+    - continuation/setup:
+        debug: true
+    - run:
+        name: Verify tunnel connectivity to internal hosts
+        shell: bash
+        command: |
+          failed=0
+          for host in \
+            api.fieldeng-sphereci.com \
+            backend.fieldeng-sphereci.com \
+            frontend.fieldeng-sphereci.com; do
+            http_code=$(curl -k -s -o /dev/null -w "%{http_code}" \
+              --max-time 15 "https://${host}/" 2>/dev/null || true)
+            echo "${host}: HTTP ${http_code}"
+            if [[ "${http_code:-0}" -le 0 ]]; then
+              echo "  ERROR: no response from ${host}"
+              failed=1
+            fi
+          done
+          [ "$failed" -eq 0 ] || exit 1
+    - continuation/cleanup
+
 jobs:
-  # You may want to add additional validation steps to ensure the commands are working as expected.
+  # ── Unit tests (no tunnel credentials needed) ──────────────────────────────
   command-tests:
     docker:
       - image: cimg/base:current
     steps:
       - checkout
+      - run:
+          name: Install bats
+          command: sudo apt-get update -qq && sudo apt-get install -y bats python3
+      - run:
+          name: Run unit tests
+          command: bats src/tests/setup.bats
+
+  # ── Docker executor ────────────────────────────────────────────────────────
+  docker-amd64-smoke-test:
+    docker:
+      - image: cimg/base:current
+    resource_class: medium
+    <<: *smoke_steps
+
+  docker-arm64-smoke-test:
+    docker:
+      - image: cimg/base:current
+    resource_class: arm.medium
+    <<: *smoke_steps
+
+  # ── Linux machine executor ─────────────────────────────────────────────────
+  linux-machine-amd64-smoke-test:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: medium
+    <<: *smoke_steps
+
+  linux-machine-arm64-smoke-test:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: arm.medium
+    <<: *smoke_steps
+
+  # ── macOS executor ─────────────────────────────────────────────────────────
+  macos-smoke-test:
+    macos:
+      xcode: "16.3.0"
+    resource_class: m4pro.medium
+    <<: *smoke_steps
+
+  # ── Windows executor ──────────────────────────────────────────────────────
+  # bash.exe: explicit — for users who set shell: bash.exe at executor level
+  windows-smoke-test:
+    machine:
+      image: windows-server-2022-gui:current
+      resource_class: windows.medium
+      shell: bash.exe
+    <<: *smoke_steps
+
+  # powershell: orb setup uses shell:bash internally; this job verifies the
+  # connectivity check itself works from a native PowerShell step.
+  windows-powershell-smoke-test:
+    machine:
+      image: windows-server-2022-gui:current
+      resource_class: windows.medium
+    steps:
+      - checkout
+      - continuation/setup:
+          debug: true
+      - run:
+          name: Verify tunnel connectivity to internal hosts
+          shell: powershell.exe
+          command: |
+            $failed = $false
+            foreach ($h in @("api.fieldeng-sphereci.com","backend.fieldeng-sphereci.com","frontend.fieldeng-sphereci.com")) {
+              $code = & curl.exe -k -s -o /dev/null -w "%{http_code}" --max-time 15 "https://$h/" 2>$null
+              Write-Host "${h}: HTTP $code"
+              if ([int]$code -le 0) {
+                Write-Host "  ERROR: no response from $h"
+                $failed = $true
+              }
+            }
+            if ($failed) { exit 1 }
+      - continuation/cleanup
+
+  windows-arm-smoke-test:
+    machine:
+      image: windows-11-arm:current
+      resource_class: windows.arm.medium
+      shell: bash.exe
+    <<: *smoke_steps
+
+  # ── GPU executor (Linux x86_64 + NVIDIA T4) ────────────────────────────────
+  gpu-linux-smoke-test:
+    machine:
+      image: linux-cuda-12:default
+    resource_class: gpu.nvidia.small.gen2
+    <<: *smoke_steps
 
 workflows:
   test-deploy:
     jobs:
-      # Make sure to include "filters: *filters" in every test job you want to run as part of your deployment.
+      # ── Static validation (always) ──────────────────────────────────────────
       - command-tests:
           filters: *filters
       - orb-tools/pack:
           filters: *filters
+
+      # ── Publish dev orb so smoke tests use the current source ───────────────
       - orb-tools/publish:
+          name: publish-dev
+          orb-name: cci-labs/site-to-site-connectivity
+          vcs-type: << pipeline.project.type >>
+          pub-type: dev
+          requires:
+            - orb-tools/pack
+          context: orb-publishing
+          filters: *filters
+
+      # ── Smoke tests — one per executor family ──────────────────────────────
+      - docker-amd64-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - docker-arm64-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - linux-machine-amd64-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - linux-machine-arm64-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - macos-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - windows-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - windows-powershell-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+      - gpu-linux-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
+
+      # ── Production publish — only on semver tags, all smoke tests must pass ─
+      - orb-tools/publish:
+          name: publish-production
           orb-name: cci-labs/site-to-site-connectivity
           vcs-type: << pipeline.project.type >>
           pub-type: production
           requires:
-            - orb-tools/pack
             - command-tests
+            - docker-amd64-smoke-test
+            - docker-arm64-smoke-test
+            - linux-machine-amd64-smoke-test
+            - linux-machine-arm64-smoke-test
+            - macos-smoke-test
+            - windows-smoke-test
+            - windows-powershell-smoke-test
+            - gpu-linux-smoke-test
           context: orb-publishing
           filters:
             branches:
