@@ -32,7 +32,8 @@ echo "Setting up the CircleCI tunnel with IP: $ip"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   echo "macOS detected, installing coreutils..."
-  brew install coreutils
+  export NONINTERACTIVE=1
+  brew list coreutils &>/dev/null || yes | brew install -y coreutils
 else
   echo "Non-macOS system detected, skipping coreutils installation"
 fi
