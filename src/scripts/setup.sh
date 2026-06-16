@@ -31,9 +31,39 @@ ip="$(curl --fail https://checkip.amazonaws.com/)"
 echo "Setting up the CircleCI tunnel with IP: $ip"
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
-  echo "macOS detected, installing coreutils..."
-  export NONINTERACTIVE=1
-  brew list coreutils &>/dev/null || brew install -y coreutils
+  echo "macOS detected, ensuring coreutils is installed..."
+
+  if ! command -v brew >/dev/null 2>&1; then
+    echo "Error: Homebrew (brew) was not found on PATH; cannot install coreutils."
+    echo "Install Homebrew (https://brew.sh) or pre-install coreutils on this executor."
+    exit 1
+  fi
+
+  if brew list --formula coreutils >/dev/null 2>&1; then
+    echo "coreutils already installed; skipping install."
+  else
+    echo "Installing coreutils via Homebrew..."
+    export NONINTERACTIVE=1
+    export HOMEBREW_NO_AUTO_UPDATE=1
+    export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+    export HOMEBREW_NO_ENV_HINTS=1
+    if ! brew install coreutils; then
+      echo "Error: 'brew install coreutils' failed."
+      exit 1
+    fi
+  fi
+
+  if ! brew list --formula coreutils >/dev/null 2>&1; then
+    echo "Error: coreutils not detected after install attempt."
+    exit 1
+  fi
+
+  if ! command -v gtimeout >/dev/null 2>&1 && ! command -v timeout >/dev/null 2>&1; then
+    echo "Error: neither 'timeout' nor 'gtimeout' is available on PATH after coreutils install."
+    exit 1
+  fi
+
+  echo "coreutils is installed and available."
 else
   echo "Non-macOS system detected, skipping coreutils installation"
 fi

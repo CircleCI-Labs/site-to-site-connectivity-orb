@@ -7,6 +7,69 @@ filters: &filters
   tags:
     only: /.*/
 
+executors:
+  macos-xcode-26-4:
+    macos:
+      xcode: 26.4.0
+    resource_class: m4pro.medium
+  macos-xcode-26-3:
+    macos:
+      xcode: 26.3.0
+    resource_class: m4pro.medium
+
+commands:
+  install-coreutils:
+    description: >
+      Validate the macOS coreutils install path used by the
+      site-to-site-connectivity setup command. Mirrors the brew-presence
+      check, NONINTERACTIVE install, post-install verification, and
+      timeout/gtimeout availability check from src/scripts/setup.sh. On
+      non-Darwin platforms this is a no-op.
+    steps:
+      - run:
+          name: Install and verify coreutils (macOS only)
+          command: |
+            set -eu -o pipefail
+
+            if [[ "$(uname -s)" != "Darwin" ]]; then
+              echo "Non-macOS system detected, skipping coreutils installation check"
+              exit 0
+            fi
+
+            echo "macOS detected, ensuring coreutils is installed..."
+
+            if ! command -v brew >/dev/null 2>&1; then
+              echo "Error: Homebrew (brew) was not found on PATH; cannot install coreutils."
+              echo "Install Homebrew (https://brew.sh) or pre-install coreutils on this executor."
+              exit 1
+            fi
+
+            if brew list --formula coreutils >/dev/null 2>&1; then
+              echo "coreutils already installed; skipping install."
+            else
+              echo "Installing coreutils via Homebrew..."
+              export NONINTERACTIVE=1
+              export HOMEBREW_NO_AUTO_UPDATE=1
+              export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
+              export HOMEBREW_NO_ENV_HINTS=1
+              if ! brew install coreutils; then
+                echo "Error: 'brew install coreutils' failed."
+                exit 1
+              fi
+            fi
+
+            if ! brew list --formula coreutils >/dev/null 2>&1; then
+              echo "Error: coreutils not detected after install attempt."
+              exit 1
+            fi
+
+            if ! command -v gtimeout >/dev/null 2>&1 && ! command -v timeout >/dev/null 2>&1; then
+              echo "Error: neither 'timeout' nor 'gtimeout' is available on PATH after coreutils install."
+              exit 1
+            fi
+
+            echo "coreutils is installed and available."
+
 jobs:
   # You may want to add additional validation steps to ensure the commands are working as expected.
   command-tests:
@@ -15,11 +78,27 @@ jobs:
     steps:
       - checkout
 
+  coreutils-install-xcode-26-4:
+    executor: macos-xcode-26-4
+    steps:
+      - checkout
+      - install-coreutils
+
+  coreutils-install-xcode-26-3:
+    executor: macos-xcode-26-3
+    steps:
+      - checkout
+      - install-coreutils
+
 workflows:
   test-deploy:
     jobs:
       # Make sure to include "filters: *filters" in every test job you want to run as part of your deployment.
       - command-tests:
+          filters: *filters
+      - coreutils-install-xcode-26-4:
+          filters: *filters
+      - coreutils-install-xcode-26-3:
           filters: *filters
       - orb-tools/pack:
           filters: *filters
@@ -30,6 +109,8 @@ workflows:
           requires:
             - orb-tools/pack
             - command-tests
+            - coreutils-install-xcode-26-4
+            - coreutils-install-xcode-26-3
           context: orb-publishing
           filters:
             branches:
