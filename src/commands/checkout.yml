@@ -1,0 +1,76 @@
+---
+description: >
+  Clone a git repository hosted on an internal SSH endpoint reached through
+  the CircleCI tunnel. Use this when your VCS (e.g. self-hosted GitLab,
+  Bitbucket Server, Gitea) is not the same VCS that CircleCI's built-in
+  checkout would target via $CIRCLE_REPOSITORY_URL — the internal SSH host
+  must appear in the tunnel-details response so setup configures a matching
+  ProxyCommand entry in ~/.ssh/config.
+
+parameters:
+  git-url:
+    type: string
+    description: >
+      SSH URL of the repository on the internal git host, e.g.
+      "git@gitlab.internal.acme.com:org/repo.git". The host must match an
+      internal_host returned by tunnel-details so SSH ProxyCommand routes
+      it through the tunnel-proxy.
+  checkout-folder:
+    type: string
+    description: "Destination folder for the clone."
+    default: "~/project"
+  checkout-depth:
+    type: integer
+    description: >
+      Depth to pass to `git clone --depth`. Set to 0 for full history.
+    default: 1
+  ref:
+    type: string
+    description: >
+      Branch or tag to check out. Defaults to $CIRCLE_TAG when set,
+      otherwise $CIRCLE_BRANCH.
+    default: ""
+  clone-timeout:
+    type: integer
+    description: >
+      Per-attempt clone timeout in seconds. Requires `timeout` (Linux/Git
+      Bash) or `gtimeout` (macOS via coreutils) on PATH; if neither is
+      available the clone runs unbounded.
+    default: 120
+  max-attempts:
+    type: integer
+    description: "Number of clone attempts before giving up."
+    default: 3
+  retry-delay:
+    type: integer
+    description: "Seconds to wait between clone attempts."
+    default: 10
+  install-coreutils:
+    type: boolean
+    description: >
+      On macOS executors, install Homebrew `coreutils` so `gtimeout` is
+      available for the per-attempt clone timeout. Hardened install:
+      requires brew on PATH, runs non-interactively, and verifies
+      timeout/gtimeout afterwards. No-op when timeout is already on PATH
+      or the executor is not macOS.
+    default: true
+  debug:
+    type: boolean
+    description: "Enable debug mode (prints resolved URL and ref)."
+    default: false
+
+steps:
+  - run:
+      name: Clone repo via tunnel
+      shell: bash
+      environment:
+        PARAM_GIT_URL: << parameters.git-url >>
+        PARAM_CHECKOUT_FOLDER: << parameters.checkout-folder >>
+        PARAM_CHECKOUT_DEPTH: << parameters.checkout-depth >>
+        PARAM_REF: << parameters.ref >>
+        PARAM_CLONE_TIMEOUT: << parameters.clone-timeout >>
+        PARAM_MAX_ATTEMPTS: << parameters.max-attempts >>
+        PARAM_RETRY_DELAY: << parameters.retry-delay >>
+        PARAM_INSTALL_COREUTILS: << parameters.install-coreutils >>
+        DEBUG: << parameters.debug >>
+      command: <<include(scripts/checkout.sh)>>

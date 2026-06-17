@@ -27,7 +27,7 @@ This orb:
 |---|---|---|---|
 | Docker | `cimg/base:current` (or any image) | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
 | Linux machine | `ubuntu-2204:current` | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
-| macOS | `xcode: 16.x`, `macos.m1.medium.gen1` | arm64 (M1/M2) | |
+| macOS | `xcode: 26.x`, `m4pro.medium` | arm64 (M4 Pro) | |
 | Windows (bash.exe) | `windows-server-2022-gui:current` | amd64 | `shell: bash.exe` optional at executor level |
 | Windows (PowerShell) | `windows-server-2022-gui:current` | amd64 | Works — orb forces `shell: bash` per-step |
 | Windows ARM | `windows-11-arm:current` | arm64 | ⚠️ Experimental — supported but untested. Use with caution. |
@@ -68,6 +68,33 @@ Registers the executor IP, fetches tunnel configuration, downloads `tunnel-proxy
 | `PATH` | Prepended with `/tmp/tunnel-proxy-bin` so `tunnel-proxy` is available in subsequent steps |
 
 **SSH config:** An `~/.ssh/config` entry with a `ProxyCommand` is written for each `ssh` tunnel, so `git clone` and the built-in `checkout` step work without additional configuration.
+
+### `checkout`
+
+Clones a git repository hosted on an internal SSH endpoint reached through the tunnel — useful when your VCS is something other than the public host CircleCI's built-in `checkout` would target via `$CIRCLE_REPOSITORY_URL` (e.g. self-hosted GitLab, Bitbucket Server, Gitea).
+
+The internal host in `git-url` must match an `internal_host` returned by the tunnel-details API so that `setup` writes a corresponding SSH `ProxyCommand` entry. If the host has no matching SSH config block the step logs a warning before attempting the clone.
+
+**Parameters:**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `git-url` | string | — *required* | Internal SSH URL, e.g. `git@gitlab.internal.acme.com:org/repo.git` |
+| `checkout-folder` | string | `~/project` | Destination folder for the clone |
+| `checkout-depth` | integer | `1` | `--depth` value; set `0` for full history |
+| `ref` | string | `""` | Branch or tag. Falls back to `$CIRCLE_TAG`, then `$CIRCLE_BRANCH` |
+| `clone-timeout` | integer | `120` | Per-attempt clone timeout in seconds (requires `timeout`/`gtimeout`) |
+| `max-attempts` | integer | `3` | Number of clone attempts before giving up |
+| `retry-delay` | integer | `10` | Seconds between clone attempts |
+| `install-coreutils` | boolean | `true` | On macOS, install Homebrew `coreutils` so `gtimeout` is available for bounded clone attempts. No-op when `timeout` is already on PATH or the executor is not macOS. |
+| `debug` | boolean | `false` | Print resolved URL, ref, and timeout backend before cloning |
+
+```yaml
+- site-to-site-connectivity/setup
+- site-to-site-connectivity/checkout:
+    git-url: "git@gitlab.internal.acme.com:platform/payments-service.git"
+- run: cd ~/project && make build
+```
 
 ### `cleanup`
 

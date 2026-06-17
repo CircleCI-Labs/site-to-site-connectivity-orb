@@ -52,7 +52,7 @@ jobs:
   docker-amd64-smoke-test:
     docker:
       - image: cimg/base:current
-    resource_class: medium
+    resource_class: small.gen2
     <<: *smoke_steps
 
   docker-arm64-smoke-test:
@@ -77,7 +77,7 @@ jobs:
   # ── macOS executor ─────────────────────────────────────────────────────────
   macos-smoke-test:
     macos:
-      xcode: "16.3.0"
+      xcode: "26.4.0"
     resource_class: m4pro.medium
     <<: *smoke_steps
 
