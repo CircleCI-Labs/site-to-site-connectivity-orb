@@ -36,6 +36,27 @@ usage:
         - site-to-site-connectivity/cleanup:
             when: always
 
+    # Clone from a self-hosted GitLab (or Bitbucket Server, Gitea, …) that
+    # lives behind the tunnel. CircleCI's built-in `- checkout` clones from
+    # $CIRCLE_REPOSITORY_URL (the *public* VCS), so this job uses the orb's
+    # `checkout` command to clone from the *internal* SSH host instead. The
+    # internal host must be returned by tunnel-details so setup writes a
+    # matching SSH ProxyCommand entry.
+    build-with-internal-gitlab:
+      docker:
+        - image: cimg/base:current
+      steps:
+        - site-to-site-connectivity/setup
+        - site-to-site-connectivity/checkout:
+            git-url: "git@gitlab.internal.acme.com:platform/payments-service.git"
+        - run:
+            name: Build application
+            command: |
+              cd ~/project
+              echo "Building application..."
+        - site-to-site-connectivity/cleanup:
+            when: always
+
   workflows:
     private-repo-workflow:
       jobs:
@@ -43,5 +64,8 @@ usage:
             context:
               - site-to-site-tunnel
         - build-with-private-repo-windows:
+            context:
+              - site-to-site-tunnel
+        - build-with-internal-gitlab:
             context:
               - site-to-site-tunnel
