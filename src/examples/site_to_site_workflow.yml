@@ -48,7 +48,7 @@ usage:
       steps:
         - site-to-site-connectivity/setup
         - site-to-site-connectivity/checkout:
-            git-url: "git@gitlab.internal.acme.com:platform/payments-service.git"
+            git-url: "git@gitlab.internal.acme.com:org/payments-service.git"
         - run:
             name: Build application
             command: |
