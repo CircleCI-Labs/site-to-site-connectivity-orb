@@ -27,7 +27,7 @@ This orb:
 |---|---|---|---|
 | Docker | `cimg/base:current` (or any image) | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
 | Linux machine | `ubuntu-2204:current` | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
-| macOS | `xcode: 16.x`, `macos.m1.medium.gen1` | arm64 (M1/M2) | |
+| macOS | `xcode: 26.x`, `m4pro.medium` | arm64 (M4 Pro) | |
 | Windows (bash.exe) | `windows-server-2022-gui:current` | amd64 | `shell: bash.exe` optional at executor level |
 | Windows (PowerShell) | `windows-server-2022-gui:current` | amd64 | Works — orb forces `shell: bash` per-step |
 | Windows ARM | `windows-11-arm:current` | arm64 | ⚠️ Experimental — supported but untested. Use with caution. |
