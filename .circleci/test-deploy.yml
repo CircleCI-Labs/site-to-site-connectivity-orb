@@ -51,10 +51,11 @@ jobs:
           name: Run compile-time gating tests
           # Packs the orb and inspects the processed config, so `when:`
           # conditions are checked without a tunnel or any credentials.
+          # Always install circleci-cli: cimg/base may ship a `circleci`
+          # binary that does not include the `orb` subcommand.
           command: |
-            command -v circleci >/dev/null || \
-              curl -fsSL https://raw.githubusercontent.com/CircleCI-Public/circleci-cli/main/install.sh \
-                | sudo bash
+            curl -fsSL https://raw.githubusercontent.com/CircleCI-Public/circleci-cli/main/install.sh \
+              | sudo bash
             bats src/tests/gating.bats
 
   # ── Docker executor ────────────────────────────────────────────────────────

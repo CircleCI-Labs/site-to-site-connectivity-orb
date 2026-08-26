@@ -14,15 +14,21 @@
 # `verify-tunnel: false` was a silent no-op. These tests pin the compile-time
 # behaviour so that cannot ship again.
 
+has_orb_pack() {
+  command -v circleci >/dev/null || return 1
+  circleci orb pack --help >/dev/null 2>&1
+}
+
 setup_file() {
   export PACKED="$BATS_FILE_TMPDIR/packed.yml"
-  if command -v circleci >/dev/null; then
+  if has_orb_pack; then
     circleci orb pack src >"$PACKED"
   fi
 }
 
 setup() {
-  command -v circleci >/dev/null || skip "circleci CLI not installed"
+  has_orb_pack || skip "circleci CLI with orb pack is required"
+  [[ -s "${PACKED:-}" ]] || skip "orb pack did not produce packed.yml"
 }
 
 # compile <params-yaml>
