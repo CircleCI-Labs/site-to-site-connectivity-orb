@@ -14,20 +14,25 @@
 # `verify-tunnel: false` was a silent no-op. These tests pin the compile-time
 # behaviour so that cannot ship again.
 
-has_orb_pack() {
+# gating.bats needs the v1 CircleCI CLI (cli.circleci.com): `orb pack` and
+# `config process`. The legacy 0.1.x CLI is a different binary.
+is_new_circleci_cli() {
   command -v circleci >/dev/null || return 1
+  local ver
+  ver="$(circleci version 2>/dev/null || true)"
+  [[ "$ver" == circleci\ 1.* ]] || return 1
   circleci orb pack --help >/dev/null 2>&1
 }
 
 setup_file() {
   export PACKED="$BATS_FILE_TMPDIR/packed.yml"
-  if has_orb_pack; then
+  if is_new_circleci_cli; then
     circleci orb pack src >"$PACKED"
   fi
 }
 
 setup() {
-  has_orb_pack || skip "circleci CLI with orb pack is required"
+  is_new_circleci_cli || skip "v1 CircleCI CLI (cli.circleci.com) with orb pack is required"
   [[ -s "${PACKED:-}" ]] || skip "orb pack did not produce packed.yml"
 }
 

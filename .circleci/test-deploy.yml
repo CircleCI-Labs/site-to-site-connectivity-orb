@@ -51,11 +51,15 @@ jobs:
           name: Run compile-time gating tests
           # Packs the orb and inspects the processed config, so `when:`
           # conditions are checked without a tunnel or any credentials.
-          # Always install circleci-cli: cimg/base may ship a `circleci`
-          # binary that does not include the `orb` subcommand.
+          # Install the v1 CLI (cli.circleci.com). cimg/base may ship a
+          # `circleci` binary without `orb pack`; put /usr/local/bin first
+          # so the install.sh binary wins.
           command: |
             curl -fsSL https://raw.githubusercontent.com/CircleCI-Public/circleci-cli/main/install.sh \
-              | sudo bash
+              | bash
+            export PATH="/usr/local/bin:${PATH}"
+            hash -r
+            circleci version
             bats src/tests/gating.bats
 
   # ── Docker executor ────────────────────────────────────────────────────────
@@ -87,7 +91,7 @@ jobs:
   # ── macOS executor ─────────────────────────────────────────────────────────
   macos-smoke-test:
     macos:
-      xcode: "16.3.0"
+      xcode: "26.6"
     resource_class: m4pro.medium
     <<: *smoke_steps
 

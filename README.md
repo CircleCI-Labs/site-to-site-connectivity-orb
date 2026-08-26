@@ -27,7 +27,7 @@ This orb:
 |---|---|---|---|
 | Docker | `cimg/base:current` (or any image) | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
 | Linux machine | `ubuntu-2204:current` | amd64, arm64 | Use `resource_class: arm.medium` for ARM |
-| macOS | `xcode: 16.x`, `macos.m1.medium.gen1` | arm64 (M1/M2) | |
+| macOS | `xcode: 26.6`, `m4pro.medium` | arm64 (M4 Pro) | |
 | Windows (bash.exe) | `windows-server-2022-gui:current` | amd64 | `shell: bash.exe` optional at executor level |
 | Windows (PowerShell) | `windows-server-2022-gui:current` | amd64 | Works — orb forces `shell: bash` per-step |
 | Windows ARM | `windows-11-arm:current` | arm64 | ⚠️ Experimental — supported but untested. Use with caution. |
@@ -235,7 +235,7 @@ We welcome [issues](https://github.com/CircleCI-Labs/site-to-site-connectivity-o
 
 1. Merge pull requests with desired changes to the main branch.
 2. Find the current version of the orb.
-   - You can run `circleci orb info cci-labs/site-to-site-connectivity | grep "Latest"` to see the current version.
+   - You can run `circleci orb get cci-labs/site-to-site-connectivity` to see the current version.
 3. Create a [new Release](https://github.com/CircleCI-Labs/site-to-site-connectivity-orb/releases/new) on GitHub.
    - Click "Choose a tag" and create a new [semantically versioned](http://semver.org/) tag. (ex: v1.0.0)
 4. Click "Publish Release".
