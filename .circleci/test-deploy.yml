@@ -139,6 +139,23 @@ jobs:
     resource_class: gpu.nvidia.small.gen2
     <<: *smoke_steps
 
+  # Proves verify-tunnel: false drops the "Verify tunnel connectivity" step.
+  # v0.2.1 ignored that parameter (boolean "false" is non-empty in bash).
+  verify-tunnel-false-smoke-test:
+    docker:
+      - image: cimg/base:current
+    resource_class: medium
+    steps:
+      - checkout
+      - continuation/setup:
+          verify-tunnel: false
+          debug: true
+      - run:
+          name: After setup without verify
+          shell: bash
+          command: echo "Reached a step after setup; verify-tunnel was false"
+      - continuation/cleanup
+
 workflows:
   test-deploy:
     jobs:
@@ -192,6 +209,10 @@ workflows:
           context: site-to-site-tunnel
           requires: [publish-dev]
           filters: *filters
+      - verify-tunnel-false-smoke-test:
+          context: site-to-site-tunnel
+          requires: [publish-dev]
+          filters: *filters
 
       # ── Production publish — only on semver tags, all smoke tests must pass ─
       - orb-tools/publish:
@@ -209,6 +230,7 @@ workflows:
             - windows-smoke-test
             - windows-powershell-smoke-test
             - gpu-linux-smoke-test
+            - verify-tunnel-false-smoke-test
           context: orb-publishing
           filters:
             branches:
