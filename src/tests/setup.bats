@@ -480,3 +480,43 @@ CURLEOF
   ! grep -q 'HTTPS_PROXY' "$ps_profile"
   ! grep -q 'BEGIN site-to-site-orb' "$ps_profile"
 }
+
+# ── verify-tunnel.sh ─────────────────────────────────────────────────────────
+# The script carries no on/off switch of its own — whether it runs at all is
+# decided by the `when:` condition in setup.yml, which is covered by
+# gating.bats. These tests cover what it does once it is reached.
+
+@test "verify-tunnel probes every tunnel and succeeds when all respond" {
+  export PARAM_VERIFY_ATTEMPTS=1
+  run bash -c "bash src/scripts/register.sh \
+    && bash src/scripts/launch-proxy.sh \
+    && bash src/scripts/verify-tunnel.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ghe.corp.test -> vcs.tun.example.com:443 (https)"* ]]
+  [[ "$output" == *"ghe.corp.test -> vcs-ssh.tun.example.com:443 (ssh)"* ]]
+  [[ "$output" == *"CircleCI tunnel setup complete"* ]]
+}
+
+@test "verify-tunnel retries then fails the job when a tunnel is unreachable" {
+  export PARAM_VERIFY_ATTEMPTS=2
+  export MOCK_PROXY_HTTP_CODE=""
+  run bash -c "bash src/scripts/register.sh \
+    && bash src/scripts/launch-proxy.sh \
+    && bash src/scripts/verify-tunnel.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Attempt 1"* ]]
+  [[ "$output" == *"Attempt 2"* ]]
+  [[ "$output" == *"Could not verify connection to ghe.corp.test"* ]]
+  [[ "$output" != *"CircleCI tunnel setup complete"* ]]
+}
+
+@test "verify-tunnel rejects an ssh tunnel that does not return a banner" {
+  write_curl_mock "$MOCK_SSH_ONLY_TUNNEL"
+  export PARAM_VERIFY_ATTEMPTS=1
+  export MOCK_SSH_BANNER="HTTP/1.1 200 OK"
+  run bash -c "bash src/scripts/register.sh \
+    && bash src/scripts/launch-proxy.sh \
+    && bash src/scripts/verify-tunnel.sh"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Could not verify connection to ghe.corp.test"* ]]
+}

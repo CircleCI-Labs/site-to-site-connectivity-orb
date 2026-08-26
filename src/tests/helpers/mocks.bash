@@ -6,6 +6,9 @@ write_curl_mock_with_stub() {
   local stub_file="$2"
   cat > "$MOCK_BIN/curl" <<CURLEOF
 #!/bin/bash
+# verify-tunnel.sh probes https tunnels through the local proxy. Single-dash
+# default so tests can export an empty value to simulate an unreachable host.
+if [[ "\$*" == *"--proxy"* ]]; then printf '%s' "\${MOCK_PROXY_HTTP_CODE-200}"; exit 0; fi
 if [[ "\$*" == *"checkip"* ]]; then echo "1.2.3.4"; exit 0; fi
 if [[ "\$*" == *"ip-policy/register"* ]]; then
   if [[ "\$*" == *"%{http_code}"* ]]; then echo "200"; fi
@@ -61,6 +64,10 @@ time.sleep(30)
 "
   exit 0
 fi
+# verify-tunnel.sh probes ssh tunnels by reading the first 4 bytes of the
+# remote banner. Single-dash default so tests can export an empty value to
+# simulate an unreachable host.
+if [[ "$1" == "connect" ]]; then printf '%s' "${MOCK_SSH_BANNER-SSH-2.0-mock}"; exit 0; fi
 exit 0
 STUBEOF
   chmod +x "$stub_file"

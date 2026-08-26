@@ -47,6 +47,15 @@ jobs:
       - run:
           name: Run unit tests
           command: bats src/tests/setup.bats
+      - run:
+          name: Run compile-time gating tests
+          # Packs the orb and inspects the processed config, so `when:`
+          # conditions are checked without a tunnel or any credentials.
+          command: |
+            command -v circleci >/dev/null || \
+              curl -fsSL https://raw.githubusercontent.com/CircleCI-Public/circleci-cli/main/install.sh \
+                | sudo bash
+            bats src/tests/gating.bats
 
   # ── Docker executor ────────────────────────────────────────────────────────
   docker-amd64-smoke-test:
